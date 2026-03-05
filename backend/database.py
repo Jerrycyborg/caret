@@ -28,6 +28,14 @@ async def init_db():
                 FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS api_keys (
+                provider TEXT PRIMARY KEY,
+                key_value TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
         await db.commit()
 
 

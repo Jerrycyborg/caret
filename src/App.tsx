@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import Sidebar from "./components/Sidebar";
 import Chat from "./components/Chat";
+import Settings from "./components/Settings";
 import "./App.css";
 
 export type View = "chat" | "files" | "terminal" | "resources" | "security" | "settings";
@@ -37,7 +38,8 @@ function App() {
             onConversationUpdated={handleConvUpdated}
           />
         )}
-        {view !== "chat" && (
+        {view === "settings" && <Settings />}
+        {view !== "chat" && view !== "settings" && (
           <div className="coming-soon">
             <div className="coming-soon-icon">
               {view === "files" && "📁"}
@@ -49,8 +51,7 @@ function App() {
             <h2>{view.charAt(0).toUpperCase() + view.slice(1)}</h2>
             <p>Coming in a future phase.</p>
           </div>
-        )}
-      </main>
+        )}      </main>
     </div>
   );
 }

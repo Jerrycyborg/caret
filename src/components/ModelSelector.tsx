@@ -15,8 +15,10 @@ const BACKEND_URL = "http://localhost:8000";
 
 export default function ModelSelector({ value, onChange }: ModelSelectorProps) {
   const [models, setModels] = useState<ModelOption[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
+  const fetchModels = () => {
+    setRefreshing(true);
     fetch(`${BACKEND_URL}/v1/models`)
       .then((r) => r.json())
       .then((data) => {
@@ -26,26 +28,40 @@ export default function ModelSelector({ value, onChange }: ModelSelectorProps) {
           if (!current) onChange(data.models[0].id);
         }
       })
-      .catch(() => {
-        // backend not running yet — keep showing current value
-      });
+      .catch(() => {})
+      .finally(() => setRefreshing(false));
+  };
+
+  useEffect(() => {
+    fetchModels();
   }, []);
 
   return (
-    <select
-      className="model-selector"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-    >
-      {models.length === 0 ? (
-        <option value={value}>{value}</option>
-      ) : (
-        models.map((m) => (
-          <option key={m.id} value={m.id}>
-            [{m.provider.toUpperCase()}] {m.name}
-          </option>
-        ))
-      )}
-    </select>
+    <div className="model-selector-wrap">
+      <select
+        className="model-selector"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {models.length === 0 ? (
+          <option value={value}>{value}</option>
+        ) : (
+          models.map((m) => (
+            <option key={m.id} value={m.id}>
+              [{m.provider.toUpperCase()}] {m.name}
+            </option>
+          ))
+        )}
+      </select>
+      <button
+        className="model-refresh-btn"
+        onClick={fetchModels}
+        disabled={refreshing}
+        title="Refresh model list"
+      >
+        {refreshing ? "…" : "↻"}
+      </button>
+    </div>
   );
+}
 }

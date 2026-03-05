@@ -16,7 +16,7 @@
 | Phase | Name                    | Status         |
 |-------|-------------------------|----------------|
 | 0     | Scaffold & AAHP Setup   | ✅ Done        |
-| 1     | Core Chat Loop          | 🔄 In Progress |
+| 1     | Core Chat Loop          | ✅ Done        |
 | 2     | Multi-Model Layer       | ⏳ Not Started |
 | 3     | OS Integration          | ⏳ Not Started |
 | 4     | Security Control Panel  | ⏳ Not Started |
@@ -27,24 +27,22 @@
 
 ## CURRENT STATE
 
-### Completed This Session (Phase 0)
-- [x] Tauri 2 + React 19/TS project scaffolded (`npm create tauri-app`)
-- [x] Renamed from `tauri-app` → `oxy` (package.json, Cargo.toml, tauri.conf.json)
-- [x] Window: 1200×800, identifier: `com.tws.oxy`
-- [x] FastAPI backend created: `backend/main.py` with CORS for Tauri origins
-- [x] Chat router: `backend/routers/chat.py` — SSE streaming via LiteLLM
-- [x] Models router: `backend/routers/models.py` — Ollama dynamic + cloud static list
-- [x] React UI: Sidebar navigation, Chat view, ModelSelector component
-- [x] Dark theme CSS (var-based, fully custom)
-- [x] Backend health indicator in chat header
-- [x] `concurrently` added — `npm run dev:all` starts both
+### Phase 1 — Completed
+- [x] `database.py`: aiosqlite + SQLite at `~/.oxy/oxy.db`, auto-init on startup
+- [x] `routers/conversations.py`: CRUD (list, create, get-with-messages, delete)
+- [x] `routers/chat.py`: saves each message to DB, bumps `updated_at`
+- [x] `main.py`: FastAPI lifespan init, dotenv loaded, conversations router included
+- [x] `backend/.env.example`: template for all provider API keys
+- [x] `Sidebar.tsx`: conversation list with `+` new chat button, auto-refreshes
+- [x] `Chat.tsx`: loads history when switching conversations; auto-creates conversation on first message (title = first 48 chars)
+- [x] `App.tsx`: `activeConvId` state, `sidebarKey` refresh signal, callbacks wired
+- [x] CSS: conversation list styles added, old boilerplate stripped
 
-### Phase 1 Remaining
-- [ ] SQLite persistence: save/load conversation history
-- [ ] Conversation list panel in sidebar
-- [ ] Backend health polling (retry on reconnect)
-- [ ] `.env` support for API keys (python-dotenv wired in)
-- [ ] Test full flow: Ollama → stream → UI renders
+### Phase 2 — Next
+- [ ] Provider config panel (UI to enter/save API keys per provider)
+- [ ] API keys persisted in OS keychain via Tauri (tauri-plugin-store or keyring)
+- [ ] Dynamic model list refresh button
+- [ ] Per-conversation model switcher (model saved with conversation)
 
 ---
 
