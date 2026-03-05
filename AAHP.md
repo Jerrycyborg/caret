@@ -18,7 +18,7 @@
 | 0     | Scaffold & AAHP Setup   | ✅ Done        |
 | 1     | Core Chat Loop          | ✅ Done        |
 | 2     | Multi-Model Layer       | ✅ Done        |
-| 3     | OS Integration          | ⏳ Not Started |
+| 3     | OS Integration          | ✅ Done        |
 | 4     | Security Control Panel  | ⏳ Not Started |
 | 5     | RAG & Documents         | ⏳ Not Started |
 | 6     | Distribution & Polish   | ⏳ Not Started |
@@ -46,12 +46,25 @@
 - [x] `ModelSelector.tsx`: ↻ refresh button to re-fetch Ollama + cloud model list
 - [x] `App.tsx`: Settings view wired (no longer "coming soon")
 
-### Phase 3 — Next (OS Integration)
-- [ ] Hardware dashboard: CPU %, RAM %, GPU via `tauri-plugin-system-info`
-- [ ] File browser panel: directory tree, click to open, drag-to-chat for RAG context
-- [ ] Terminal panel: embedded PTY shell via `tauri-plugin-shell`
-- [ ] App/process list: view running processes, soft-kill
-- [ ] Rust commands: `get_system_info` → JSON for React dashboard
+### Phase 3 — Completed (OS Integration)
+- [x] `src-tauri/Cargo.toml`: added `sysinfo = "0.33"`, `dirs = "5"`, `tauri-plugin-shell = "2"`, `tauri-plugin-fs = "2"`
+- [x] `src-tauri/src/lib.rs`: `get_system_info` command (structs CpuInfo/MemInfo/DiskInfo/ProcessInfo/SystemInfo via sysinfo crate); `get_home_dir` command via dirs crate; both plugins registered
+- [x] `capabilities/default.json`: shell + fs permissions added
+- [x] `Resources.tsx`: live CPU/RAM/disk gauges (auto-colour by threshold) + top-20 process table; polls `invoke("get_system_info")` every 2 s
+- [x] `Terminal.tsx`: shell command runner via `Command.create()` (plugin-shell); `cd`/`clear` builtins; ↑/↓ command history; cwd tracking; cross-platform (sh on Unix, cmd on Windows)
+- [x] `Files.tsx`: file browser via `readDir` (plugin-fs); starts at home dir; click to navigate into dirs; Up button; extension-badge icons
+- [x] `App.tsx`: Resources/Terminal/Files panels wired; Security stays "coming-soon" for Phase 4
+- [x] `App.css`: Resources gauges/process table, Terminal dark theme, Files list styles, coming-soon styles
+- [x] Fixed sysinfo 0.33 API: `RefreshKind::nothing()` replaces removed `RefreshKind::new()`
+- [x] Installed `@tauri-apps/plugin-shell` + `@tauri-apps/plugin-fs` npm packages
+- **Commit:** `60d8c80`
+
+### Phase 4 — Next (Security Control Panel)
+- [ ] Firewall rules viewer/toggle (via shell commands — `pfctl` / `netsh`)
+- [ ] Running services list with enable/disable
+- [ ] User account management (list users, lock/unlock)
+- [ ] Audit log viewer (tail system log)
+- [ ] Network connections monitor (active sockets)
 
 ---
 
@@ -72,7 +85,11 @@ Oxy/
 │   └── components/
 │       ├── Sidebar.tsx
 │       ├── Chat.tsx                 ← SSE streaming chat
-│       └── ModelSelector.tsx       ← Ollama + cloud models
+│       ├── ModelSelector.tsx       ← Ollama + cloud models
+│       ├── Settings.tsx            ← API key vault UI
+│       ├── Resources.tsx           ← CPU/RAM/disk/process dashboard
+│       ├── Terminal.tsx            ← shell command runner
+│       └── Files.tsx               ← file browser
 ├── src-tauri/                       ← Rust/Tauri shell
 │   ├── Cargo.toml                   ← package: oxy, lib: oxy_lib
 │   ├── build.rs
