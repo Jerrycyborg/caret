@@ -5,6 +5,7 @@ import Settings from "./components/Settings";
 import Resources from "./components/Resources";
 import Terminal from "./components/Terminal";
 import Files from "./components/Files";
+import SecurityPanel from "./components/SecurityPanel";
 import "./App.css";
 
 export type View = "chat" | "files" | "terminal" | "resources" | "security" | "settings";
@@ -45,13 +46,7 @@ function App() {
         {view === "resources" && <Resources />}
         {view === "terminal" && <Terminal />}
         {view === "files" && <Files />}
-        {view === "security" && (
-          <div className="coming-soon">
-            <div className="coming-soon-icon">🔒</div>
-            <h2>Security</h2>
-            <p>Coming in Phase 4.</p>
-          </div>
-        )}
+        {view === "security" && <SecurityPanel />}
       </main>
     </div>
   );

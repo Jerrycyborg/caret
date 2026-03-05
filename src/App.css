@@ -711,3 +711,38 @@ body {
   border-color: var(--danger);
   color: var(--danger);
 }
+
+/* ===== SECURITY PANEL ===== */
+.security-panel {
+  height: 100%;
+  width: 100%;
+  overflow: auto;
+  padding: 24px;
+  background: var(--bg-surface);
+}
+
+.security-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 24px;
+  margin-top: 24px;
+}
+
+section {
+  background: var(--bg-secondary);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.loading {
+  color: var(--accent);
+}
+
+.input-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}

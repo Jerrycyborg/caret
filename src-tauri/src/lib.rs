@@ -1,3 +1,84 @@
+mod plugins;
+use plugins::oxy_plugin::{list_plugins, run_plugin, toggle_plugin_enabled, discover_plugins, install_plugin};
+#[tauri::command]
+fn set_firewall_enabled(enabled: bool) -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    let cmd = if enabled { "sudo pfctl -e" } else { "sudo pfctl -d" };
+    #[cfg(target_os = "linux")]
+    let cmd = if enabled { "sudo ufw enable" } else { "sudo ufw disable" };
+    #[cfg(target_os = "windows")]
+    let cmd = if enabled {
+        "netsh advfirewall set allprofiles state on"
+    } else {
+        "netsh advfirewall set allprofiles state off"
+    };
+    std::process::Command::new("sh")
+        .arg("-c")
+        .arg(cmd)
+        .output()
+        .map_err(|e| e.to_string())
+        .and_then(|o| String::from_utf8(o.stdout).map_err(|e| e.to_string()))
+}
+
+#[tauri::command]
+fn control_service(name: String, action: String) -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    let cmd = format!("sudo launchctl {} {}", action, name);
+    #[cfg(target_os = "linux")]
+    let cmd = format!("sudo systemctl {} {}", action, name);
+    #[cfg(target_os = "windows")]
+    let cmd = format!("powershell Start-Service -Name {}", name); // Only start for now
+    std::process::Command::new("sh")
+        .arg("-c")
+        .arg(cmd)
+        .output()
+        .map_err(|e| e.to_string())
+        .and_then(|o| String::from_utf8(o.stdout).map_err(|e| e.to_string()))
+}
+
+#[tauri::command]
+fn lock_user(name: String, lock: bool) -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    let cmd = if lock {
+        format!("sudo pwpolicy -u {} -setpolicy 'isDisabled=1'", name)
+    } else {
+        format!("sudo pwpolicy -u {} -setpolicy 'isDisabled=0'", name)
+    };
+    #[cfg(target_os = "linux")]
+    let cmd = if lock {
+        format!("sudo usermod -L {}", name)
+    } else {
+        format!("sudo usermod -U {}", name)
+    };
+    #[cfg(target_os = "windows")]
+    let cmd = if lock {
+        format!("net user {} /active:no", name)
+    } else {
+        format!("net user {} /active:yes", name)
+    };
+    std::process::Command::new("sh")
+        .arg("-c")
+        .arg(cmd)
+        .output()
+        .map_err(|e| e.to_string())
+        .and_then(|o| String::from_utf8(o.stdout).map_err(|e| e.to_string()))
+}
+
+#[tauri::command]
+fn terminate_connection(pid: u32) -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    let cmd = format!("sudo kill -9 {}", pid);
+    #[cfg(target_os = "linux")]
+    let cmd = format!("sudo kill -9 {}", pid);
+    #[cfg(target_os = "windows")]
+    let cmd = format!("taskkill /PID {} /F", pid);
+    std::process::Command::new("sh")
+        .arg("-c")
+        .arg(cmd)
+        .output()
+        .map_err(|e| e.to_string())
+        .and_then(|o| String::from_utf8(o.stdout).map_err(|e| e.to_string()))
+}
 use serde::Serialize;
 use sysinfo::{CpuRefreshKind, Disks, MemoryRefreshKind, ProcessRefreshKind, RefreshKind, System};
 
@@ -105,6 +186,7 @@ fn get_system_info() -> SystemInfo {
     SystemInfo { cpu, mem, disks, top_processes: procs }
 }
 
+
 #[tauri::command]
 fn get_home_dir() -> String {
     dirs::home_dir()
@@ -113,13 +195,110 @@ fn get_home_dir() -> String {
         .into_owned()
 }
 
+#[tauri::command]
+fn get_firewall_status() -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    let cmd = "sudo pfctl -sr";
+    #[cfg(target_os = "linux")]
+    let cmd = "sudo iptables -L";
+    #[cfg(target_os = "windows")]
+    let cmd = "netsh advfirewall firewall show rule name=all";
+    std::process::Command::new("sh")
+        .arg("-c")
+        .arg(cmd)
+        .output()
+        .map_err(|e| e.to_string())
+        .and_then(|o| String::from_utf8(o.stdout).map_err(|e| e.to_string()))
+}
+
+#[tauri::command]
+fn get_services() -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    let cmd = "launchctl list";
+    #[cfg(target_os = "linux")]
+    let cmd = "systemctl list-units --type=service --state=running";
+    #[cfg(target_os = "windows")]
+    let cmd = "powershell Get-Service | Where-Object {$_.Status -eq 'Running'}";
+    std::process::Command::new("sh")
+        .arg("-c")
+        .arg(cmd)
+        .output()
+        .map_err(|e| e.to_string())
+        .and_then(|o| String::from_utf8(o.stdout).map_err(|e| e.to_string()))
+}
+
+#[tauri::command]
+fn get_users() -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    let cmd = "dscl . list /Users";
+    #[cfg(target_os = "linux")]
+    let cmd = "cut -d: -f1 /etc/passwd";
+    #[cfg(target_os = "windows")]
+    let cmd = "net user";
+    std::process::Command::new("sh")
+        .arg("-c")
+        .arg(cmd)
+        .output()
+        .map_err(|e| e.to_string())
+        .and_then(|o| String::from_utf8(o.stdout).map_err(|e| e.to_string()))
+}
+
+#[tauri::command]
+fn get_audit_log() -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    let cmd = "tail -n 100 /var/log/system.log";
+    #[cfg(target_os = "linux")]
+    let cmd = "tail -n 100 /var/log/syslog";
+    #[cfg(target_os = "windows")]
+    let cmd = "powershell Get-EventLog -LogName System -Newest 100";
+    std::process::Command::new("sh")
+        .arg("-c")
+        .arg(cmd)
+        .output()
+        .map_err(|e| e.to_string())
+        .and_then(|o| String::from_utf8(o.stdout).map_err(|e| e.to_string()))
+}
+
+#[tauri::command]
+fn get_network_connections() -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    let cmd = "netstat -an";
+    #[cfg(target_os = "linux")]
+    let cmd = "netstat -tunap";
+    #[cfg(target_os = "windows")]
+    let cmd = "netstat -an";
+    std::process::Command::new("sh")
+        .arg("-c")
+        .arg(cmd)
+        .output()
+        .map_err(|e| e.to_string())
+        .and_then(|o| String::from_utf8(o.stdout).map_err(|e| e.to_string()))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
-        .invoke_handler(tauri::generate_handler![get_system_info, get_home_dir])
+        .invoke_handler(tauri::generate_handler![
+            get_system_info,
+            get_home_dir,
+            get_firewall_status,
+            get_services,
+            get_users,
+            get_audit_log,
+            get_network_connections,
+            set_firewall_enabled,
+            control_service,
+            lock_user,
+            terminate_connection,
+            list_plugins,
+            run_plugin,
+            toggle_plugin_enabled,
+            discover_plugins,
+            install_plugin,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running Oxy");
 }

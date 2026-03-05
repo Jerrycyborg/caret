@@ -1,3 +1,19 @@
+### Phase 4 — In Progress (Security Control Panel)
+- [x] SecurityPanel.tsx: React UI for firewall, services, users, audit log, network connections
+- [x] Rust/Tauri backend: get_firewall_status, get_services, get_users, get_audit_log, get_network_connections (cross-platform shell)
+- [x] Live status display wired to backend
+- [x] Control actions: enable/disable firewall, start/stop/restart services, lock/unlock users, terminate connections
+- [x] UI: refresh button, error handling, input controls
+- [ ] Further UI/UX polish and validation
+### Phase 5 — In Progress (Plugin Architecture)
+- [x] Designed Rust plugin API: OxyPlugin trait, registry, example Echo plugin
+- [x] Created src-tauri/plugins/oxy_plugin.rs with plugin trait, registry, Echo plugin, Tauri commands
+- [x] Integrated plugin API into src-tauri/src/lib.rs, exposed list_plugins and run_plugin commands
+- [x] Scaffolded React PluginPanel.tsx for plugin management UI
+- [ ] Wire frontend PluginPanel to backend plugin commands
+- [ ] Add enable/disable plugin controls and status display
+- [ ] Update AAHP.md and README.md for plugin architecture progress
+
 # AAHP — Oxy Development Checkpoint
 > Adaptive AI-Handoff Protocol. Paste this file at the start of every new AI chat session to restore full context in ~500 tokens.
 
@@ -5,7 +21,11 @@
 
 ## PROJECT
 **Name:** Oxy
-**Goal:** Cross-platform AI-powered personal OS assistant (Tauri 2 desktop app + FastAPI/Python sidecar)
+**Goal:** AI assistant deeply integrated into the operating system, leveraging all available machine resources (CPU, GPU, memory, etc.) for advanced tasks. Oxy is designed to go beyond basic OS help, performing complex operations similar to OpenClaw or other powerful AI assistants, with full access to system capabilities and hardware. Core features include:
+
+- **Plugin architecture** for extensibility and custom skills
+- **Hardware acceleration** (GPU, NPU, etc.) for high-performance AI workloads
+- **Multi-agent orchestration** for parallel, collaborative, or specialized AI tasks
 **Repo:** `Internal projects/Oxy`
 **Stack:** Tauri 2 (Rust + React 19/TS) · FastAPI + LiteLLM (Python sidecar) · SQLite · LanceDB
 
@@ -20,8 +40,29 @@
 | 2     | Multi-Model Layer       | ✅ Done        |
 | 3     | OS Integration          | ✅ Done        |
 | 4     | Security Control Panel  | ⏳ Not Started |
-| 5     | RAG & Documents         | ⏳ Not Started |
-| 6     | Distribution & Polish   | ⏳ Not Started |
+| 5     | Plugin Architecture     | ⏳ Not Started |
+| 6     | Hardware Acceleration   | ⏳ Not Started |
+| 7     | Multi-Agent Orchestration| ⏳ Not Started |
+| 8     | RAG & Documents         | ⏳ Not Started |
+| 9     | Distribution & Polish   | ⏳ Not Started |
+---
+
+## TECHNICAL ROADMAP
+
+**Plugin Architecture**
+- Design and implement a plugin system for extensibility
+- Support custom skills, tools, and integrations
+- Secure sandboxing and permission management
+
+**Hardware Acceleration**
+- Detect and utilize available GPU/NPU resources
+- Integrate with frameworks (CUDA, Metal, OpenCL, etc.)
+- Optimize AI workloads for performance
+
+**Multi-Agent Orchestration**
+- Enable parallel and collaborative agent workflows
+- Support specialized agents for different tasks
+- Design agent communication and coordination protocols
 
 ---
 
