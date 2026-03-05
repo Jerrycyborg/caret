@@ -1,18 +1,66 @@
 
-# Oxy — AI OS Integration Assistant
+<div align="center">
+	<h1>Oxy — AI OS Integration Assistant</h1>
+	<p>Cross-platform AI assistant with plugin architecture, hardware acceleration, and multi-agent orchestration.</p>
+</div>
 
+---
 
-Oxy is an AI assistant deeply integrated into the operating system, designed to leverage all available machine resources (CPU, GPU, memory, etc.) for advanced tasks. It goes beyond basic OS help, aiming to perform complex operations similar to OpenClaw or other powerful AI assistants, with full access to system capabilities and hardware.
+## Features
 
-**Core features include:**
-- Plugin architecture for extensibility and custom skills
+- Plugin marketplace for extensibility and custom skills
 - Hardware acceleration (GPU, NPU, etc.) for high-performance AI workloads
 - Multi-agent orchestration for parallel, collaborative, or specialized AI tasks
+- Deep OS integration (Tauri 2, Rust, React 19/TS, FastAPI/Python)
+- User-friendly UI with security and onboarding panels
 
-Built with Tauri 2 (Rust + React 19/TS) and a FastAPI/Python sidecar, Oxy provides a cross-platform desktop experience with deep OS integration and multi-model AI capabilities.
+## Prerequisites
 
-## Recommended IDE Setup
+- [Node.js](https://nodejs.org/) (v18+ recommended)
+- [Rust](https://www.rust-lang.org/tools/install)
+- [Python 3.9+](https://www.python.org/downloads/) (for FastAPI backend)
+- [VS Code](https://code.visualstudio.com/) (recommended)
 
-## Recommended IDE Setup
+## Installation
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+Clone the repository:
+
+```sh
+git clone https://github.com/Jerrycyborg/oxy.git
+cd oxy
+```
+
+Install dependencies:
+
+```sh
+npm install
+```
+
+## Build & Run
+
+### Development (hot reload)
+
+```sh
+npm run tauri dev
+```
+
+### Production build
+
+```sh
+npm run build
+npx tauri build
+```
+
+## Usage
+
+- Launch the app and use the sidebar to access Chat, Files, Terminal, Security, Settings, and the Plugin Marketplace.
+- Install and manage plugins from the Marketplace panel.
+- Security and onboarding panels are designed for non-technical users.
+
+## Contributing
+
+Pull requests and issues are welcome! Please follow conventional commit messages and ensure all code is linted and tested before submitting.
+
+## License
+
+MIT License
