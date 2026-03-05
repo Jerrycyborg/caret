@@ -17,7 +17,7 @@
 |-------|-------------------------|----------------|
 | 0     | Scaffold & AAHP Setup   | ✅ Done        |
 | 1     | Core Chat Loop          | ✅ Done        |
-| 2     | Multi-Model Layer       | ⏳ Not Started |
+| 2     | Multi-Model Layer       | ✅ Done        |
 | 3     | OS Integration          | ⏳ Not Started |
 | 4     | Security Control Panel  | ⏳ Not Started |
 | 5     | RAG & Documents         | ⏳ Not Started |
@@ -38,11 +38,20 @@
 - [x] `App.tsx`: `activeConvId` state, `sidebarKey` refresh signal, callbacks wired
 - [x] CSS: conversation list styles added, old boilerplate stripped
 
-### Phase 2 — Next
-- [ ] Provider config panel (UI to enter/save API keys per provider)
-- [ ] API keys persisted in OS keychain via Tauri (tauri-plugin-store or keyring)
-- [ ] Dynamic model list refresh button
-- [ ] Per-conversation model switcher (model saved with conversation)
+### Phase 2 — Completed
+- [x] `database.py`: `api_keys` table added
+- [x] `routers/settings.py`: GET/PUT/DELETE `/v1/settings/keys/{provider}` (Ollama, OpenAI, Anthropic, Gemini, Azure)
+- [x] `main.py`: keys loaded from DB into `os.environ` on startup so LiteLLM picks them up; also applied immediately on save
+- [x] `Settings.tsx`: provider cards with masked display, password input, Save/Clear, instant ✓ feedback
+- [x] `ModelSelector.tsx`: ↻ refresh button to re-fetch Ollama + cloud model list
+- [x] `App.tsx`: Settings view wired (no longer "coming soon")
+
+### Phase 3 — Next (OS Integration)
+- [ ] Hardware dashboard: CPU %, RAM %, GPU via `tauri-plugin-system-info`
+- [ ] File browser panel: directory tree, click to open, drag-to-chat for RAG context
+- [ ] Terminal panel: embedded PTY shell via `tauri-plugin-shell`
+- [ ] App/process list: view running processes, soft-kill
+- [ ] Rust commands: `get_system_info` → JSON for React dashboard
 
 ---
 

@@ -2,6 +2,9 @@ import { useState, useCallback } from "react";
 import Sidebar from "./components/Sidebar";
 import Chat from "./components/Chat";
 import Settings from "./components/Settings";
+import Resources from "./components/Resources";
+import Terminal from "./components/Terminal";
+import Files from "./components/Files";
 import "./App.css";
 
 export type View = "chat" | "files" | "terminal" | "resources" | "security" | "settings";
@@ -39,24 +42,19 @@ function App() {
           />
         )}
         {view === "settings" && <Settings />}
-        {view !== "chat" && view !== "settings" && (
+        {view === "resources" && <Resources />}
+        {view === "terminal" && <Terminal />}
+        {view === "files" && <Files />}
+        {view === "security" && (
           <div className="coming-soon">
-            <div className="coming-soon-icon">
-              {view === "files" && "📁"}
-              {view === "terminal" && "⌨️"}
-              {view === "resources" && "📊"}
-              {view === "security" && "🔒"}
-              {view === "settings" && "⚙️"}
-            </div>
-            <h2>{view.charAt(0).toUpperCase() + view.slice(1)}</h2>
-            <p>Coming in a future phase.</p>
+            <div className="coming-soon-icon">🔒</div>
+            <h2>Security</h2>
+            <p>Coming in Phase 4.</p>
           </div>
-        )}      </main>
+        )}
+      </main>
     </div>
   );
 }
-
-export default App;
-
 
 export default App;

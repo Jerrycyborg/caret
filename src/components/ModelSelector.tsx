@@ -64,4 +64,3 @@ export default function ModelSelector({ value, onChange }: ModelSelectorProps) {
     </div>
   );
 }
-}
