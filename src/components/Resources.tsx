@@ -5,7 +5,25 @@ interface CpuInfo { usage: number; core_count: number; brand: string }
 interface MemInfo { used_gb: number; total_gb: number; used_pct: number }
 interface DiskInfo { name: string; mount: string; used_gb: number; total_gb: number; used_pct: number }
 interface ProcessInfo { pid: number; name: string; cpu_pct: number; mem_mb: number }
-interface SystemInfo { cpu: CpuInfo; mem: MemInfo; disks: DiskInfo[]; top_processes: ProcessInfo[] }
+interface ExecutionTargetInfo { id: string; label: string; available: boolean; reason: string }
+interface ToolAdapterInfo {
+  id: string;
+  name: string;
+  adapter_type: string;
+  health: string;
+  capabilities: string[];
+  input_contract: string;
+  output_contract: string;
+  error_contract: string;
+  orchestration_role: string;
+}
+interface SystemInfo {
+  cpu: CpuInfo;
+  mem: MemInfo;
+  disks: DiskInfo[];
+  top_processes: ProcessInfo[];
+  execution_targets: ExecutionTargetInfo[];
+}
 
 function GaugeBar({ pct, color }: { pct: number; color: string }) {
   return (
@@ -17,13 +35,18 @@ function GaugeBar({ pct, color }: { pct: number; color: string }) {
 
 export default function Resources() {
   const [info, setInfo] = useState<SystemInfo | null>(null);
+  const [adapters, setAdapters] = useState<ToolAdapterInfo[]>([]);
   const [error, setError] = useState("");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refresh = async () => {
     try {
-      const data = await invoke<SystemInfo>("get_system_info");
-      setInfo(data);
+      const [systemInfo, toolAdapters] = await Promise.all([
+        invoke<SystemInfo>("get_system_info"),
+        invoke<ToolAdapterInfo[]>("list_tool_adapters"),
+      ]);
+      setInfo(systemInfo);
+      setAdapters(toolAdapters);
       setError("");
     } catch (e) {
       setError(String(e));
@@ -79,6 +102,40 @@ export default function Resources() {
             </div>
           );
         })}
+      </div>
+
+      <div className="res-section-title">Execution Targets</div>
+      <div className="res-grid">
+        {info.execution_targets.map((target) => (
+          <div key={target.id} className="res-card">
+            <div className="res-card-label">{target.label}</div>
+            <div
+              className="res-card-value"
+              style={{ color: target.available ? "var(--success)" : "var(--text-muted)" }}
+            >
+              {target.available ? "Available" : "Unavailable"}
+            </div>
+            <div className="res-card-sub">{target.reason}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="res-section-title">Tool Adapters</div>
+      <div className="res-grid">
+        {adapters.map((adapter) => (
+          <div key={adapter.id} className="res-card">
+            <div className="res-card-label">{adapter.name}</div>
+            <div
+              className="res-card-value"
+              style={{ color: adapter.health === "healthy" ? "var(--success)" : "#f59e0b", fontSize: 18 }}
+            >
+              {adapter.health}
+            </div>
+            <div className="res-card-sub">{adapter.orchestration_role}</div>
+            <div className="res-card-sub">Type: {adapter.adapter_type}</div>
+            <div className="res-card-sub">Capabilities: {adapter.capabilities.join(", ")}</div>
+          </div>
+        ))}
       </div>
 
       {/* Process table */}

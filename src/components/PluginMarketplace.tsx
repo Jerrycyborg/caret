@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { FaPuzzlePiece, FaCloudSun, FaShieldAlt } from "react-icons/fa";
 
@@ -11,6 +11,7 @@ type MarketplacePlugin = {
   category?: string;
 };
 
+export default function PluginMarketplace() {
   const [plugins, setPlugins] = useState<MarketplacePlugin[]>([]);
   const [error, setError] = useState("");
   const [installing, setInstalling] = useState<string>("");

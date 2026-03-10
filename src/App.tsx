@@ -6,9 +6,10 @@ import Resources from "./components/Resources";
 import Terminal from "./components/Terminal";
 import Files from "./components/Files";
 import SecurityPanel from "./components/SecurityPanel";
+import PluginMarketplace from "./components/PluginMarketplace";
 import "./App.css";
 
-export type View = "chat" | "files" | "terminal" | "resources" | "security" | "settings";
+export type View = "chat" | "files" | "terminal" | "resources" | "security" | "settings" | "marketplace";
 
 function App() {
   const [view, setView] = useState<View>("chat");
@@ -47,6 +48,7 @@ function App() {
         {view === "terminal" && <Terminal />}
         {view === "files" && <Files />}
         {view === "security" && <SecurityPanel />}
+        {view === "marketplace" && <PluginMarketplace />}
       </main>
     </div>
   );

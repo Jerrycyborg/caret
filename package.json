@@ -9,7 +9,11 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "backend": "cd backend && python3 -m uvicorn main:app --reload --port 8000",
-    "dev:all": "concurrently \"npm run backend\" \"npm run tauri dev\""
+    "dev:all": "concurrently \"npm run backend\" \"npm run tauri dev\"",
+    "test": "jest --config build/config/jest.config.cjs",
+    "verify:frontend": "build/ci/verify-frontend.sh",
+    "verify:rust": "build/ci/verify-rust.sh",
+    "verify:all": "build/ci/verify-all.sh"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
@@ -22,10 +26,16 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/jest": "^30.0.0",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
     "concurrently": "^9.0.0",
+    "jest": "^30.2.0",
+    "jest-environment-jsdom": "^30.2.0",
+    "ts-jest": "^29.4.6",
     "typescript": "~5.8.3",
     "vite": "^7.0.4"
   }

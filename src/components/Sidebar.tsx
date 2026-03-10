@@ -24,6 +24,7 @@ const navItems: { id: View; label: string; icon: string }[] = [
   { id: "terminal", label: "Terminal", icon: "⌨️" },
   { id: "resources", label: "Resources", icon: "📊" },
   { id: "security", label: "Security", icon: "🔒" },
+  { id: "marketplace", label: "Marketplace", icon: "🧩" },
   { id: "settings", label: "Settings", icon: "⚙️" },
 ];
 
