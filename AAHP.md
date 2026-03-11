@@ -166,7 +166,11 @@ Current backend tool registry includes:
 - `file.write`
 - `git.status`
 - `git.diff`
+- `git.log`
+- `git.show`
 - `project.search`
+- `project.tree`
+- `project.read_many`
 - bounded `shell.run`
 - allowlisted `build.run`
 

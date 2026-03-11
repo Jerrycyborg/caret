@@ -25,6 +25,13 @@ class ToolDefinition:
     rollback_hint: str
 
 
+@dataclass(frozen=True)
+class ToolPolicy:
+    risk_level: str
+    approval_required: bool
+    executor_type: str
+
+
 def tool_registry() -> list[ToolDefinition]:
     return [
         ToolDefinition(
@@ -145,6 +152,15 @@ def get_tool_definition(tool_id: str) -> ToolDefinition:
         if tool.id == tool_id:
             return tool
     raise ValueError(f"Unknown tool '{tool_id}'")
+
+
+def get_tool_policy(tool_id: str) -> ToolPolicy:
+    tool = get_tool_definition(tool_id)
+    return ToolPolicy(
+        risk_level=tool.risk_level,
+        approval_required=tool.approval_required,
+        executor_type=tool.executor_type,
+    )
 
 
 def resolve_workspace_path(path: str) -> Path:

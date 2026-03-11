@@ -9,7 +9,7 @@ from typing import Any
 import aiosqlite
 
 from database import get_db_path
-from services.tool_registry import WORKSPACE_ROOT, execute_tool, registry_payload, serialize_json
+from services.tool_registry import WORKSPACE_ROOT, execute_tool, get_tool_policy, registry_payload, serialize_json
 
 TASK_STATUS_DRAFT = "draft"
 TASK_STATUS_PROPOSED = "proposed"
@@ -99,6 +99,15 @@ async def list_tasks() -> list[dict[str, Any]]:
 
 async def create_task(prompt: str, conversation_id: str | None = None) -> dict[str, Any]:
     plan = plan_prompt(prompt)
+    normalized_steps = [_normalize_step(step) for step in plan.steps]
+    plan = PlanDraft(
+        prompt_class=plan.prompt_class,
+        title=plan.title,
+        summary=plan.summary,
+        risk_level=_aggregate_risk(normalized_steps),
+        next_suggested_action=plan.next_suggested_action,
+        steps=normalized_steps,
+    )
     task_id = str(uuid.uuid4())
     step_ids = [str(uuid.uuid4()) for _ in plan.steps]
 
@@ -369,17 +378,7 @@ async def advance_task(task_id: str) -> None:
                         id, task_id, step_id, label, target, tool_name, risk_level, reason, rollback_note, status
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
                     """,
-                    (
-                        str(uuid.uuid4()),
-                        task_id,
-                        step["id"],
-                        step["title"],
-                        _step_target(step),
-                        step["tool_id"] or "rust.delegate",
-                        step["risk_level"],
-                        _step_reason(step),
-                        step["rollback_note"] or "",
-                    ),
+                    _approval_insert_values(task_id, step),
                 )
                 await db.execute(
                     "UPDATE tasks SET status = ?, next_suggested_action = ?, updated_at = datetime('now') WHERE id = ?",
@@ -390,7 +389,7 @@ async def advance_task(task_id: str) -> None:
                     task_id,
                     step["id"],
                     "approval_required",
-                    "Step paused pending approval.",
+                "Step paused pending approval.",
                     {"tool_id": step["tool_id"], "risk_level": step["risk_level"]},
                 )
                 await db.commit()
@@ -424,12 +423,11 @@ def plan_prompt(prompt: str) -> PlanDraft:
     lower = text.lower()
     prompt_class = _classify_prompt(lower, text)
     steps = _steps_for_prompt_class(prompt_class, text, lower)
-    risk_level = _aggregate_risk(steps)
     return PlanDraft(
         prompt_class=prompt_class,
         title=_build_title(prompt),
         summary=_build_summary(prompt_class, steps),
-        risk_level=risk_level,
+        risk_level=_aggregate_risk(steps),
         next_suggested_action="Review approvals if any mutating or privileged steps are proposed.",
         steps=steps,
     )
@@ -729,12 +727,10 @@ def _steps_for_prompt_class(prompt_class: str, text: str, lower: str) -> list[St
     if prompt_class == "privileged_request":
         target = _extract_privileged_target(lower) or "system"
         return _repo_baseline_steps() + [
-            StepDraft(
+            _privileged_step(
                 title=f"Delegate privileged action for {target}",
                 description=f"Prepare a Rust-only privileged action for `{target}`.",
-                tool_id=None,
                 payload={"target": target},
-                risk_level=PRIVILEGED_RISK,
                 rollback_note="Use the Rust security flow and verify system state after execution.",
                 reason="Privileged OS changes must stay in the Rust bridge.",
                 target=target,
@@ -744,24 +740,22 @@ def _steps_for_prompt_class(prompt_class: str, text: str, lower: str) -> list[St
         path, content = _extract_write_request(text) or ("README.md", "")
         steps = _repo_baseline_steps()
         steps.append(
-            StepDraft(
+            _tool_step(
                 title=f"Inspect {path}",
                 description=f"Read `{path}` before any write if it already exists.",
                 tool_id="project.read_many",
                 payload={"paths": [path]},
-                risk_level=READ_RISK,
                 rollback_note="No rollback needed for reads.",
                 reason="Review current file contents before mutating.",
                 target=path,
             )
         )
         steps.append(
-            StepDraft(
+            _tool_step(
                 title=f"Write {path}",
                 description=f"Write requested content into `{path}`.",
                 tool_id="file.write",
                 payload={"path": path, "content": content},
-                risk_level=WRITE_RISK,
                 rollback_note="Restore the previous file contents from version control or backup.",
                 reason="Writing files mutates the workspace.",
                 target=path,
@@ -771,22 +765,20 @@ def _steps_for_prompt_class(prompt_class: str, text: str, lower: str) -> list[St
     if prompt_class == "build_then_inspect":
         command = _extract_run_command(text) or _infer_build_command(text)
         return _repo_baseline_steps() + [
-            StepDraft(
+            _tool_step(
                 title="Run build command",
                 description=f"Execute `{command}` in the workspace.",
                 tool_id="build.run",
                 payload={"command": command, "cwd": "."},
-                risk_level=WRITE_RISK,
                 rollback_note="Revert generated artifacts or working tree changes if needed.",
                 reason="Build commands can mutate the workspace.",
                 target=command,
             ),
-            StepDraft(
+            _tool_step(
                 title="Review repository diff",
                 description="Inspect repository diff after the build step.",
                 tool_id="git.diff",
                 payload={"cwd": "."},
-                risk_level=READ_RISK,
                 rollback_note="No rollback needed for reads.",
                 reason="Diff inspection shows build side effects.",
                 target="git:diff",
@@ -796,12 +788,11 @@ def _steps_for_prompt_class(prompt_class: str, text: str, lower: str) -> list[St
         query = _extract_search_term(text) or "TODO"
         read_path = _extract_path(text, ("read", "open"))
         steps = _repo_baseline_steps() + [
-            StepDraft(
+            _tool_step(
                 title=f"Search workspace for {query}",
                 description=f"Search the workspace for `{query}`.",
                 tool_id="project.search",
                 payload={"query": query, "cwd": "."},
-                risk_level=READ_RISK,
                 rollback_note="No rollback needed for reads.",
                 reason="Search is read-only and narrows the next read.",
                 target=f"workspace-search:{query}",
@@ -809,12 +800,11 @@ def _steps_for_prompt_class(prompt_class: str, text: str, lower: str) -> list[St
         ]
         if read_path:
             steps.append(
-                StepDraft(
+                _tool_step(
                     title=f"Read {read_path}",
                     description=f"Read `{read_path}` from the workspace.",
                     tool_id="file.read",
                     payload={"path": read_path},
-                    risk_level=READ_RISK,
                     rollback_note="No rollback needed for reads.",
                     reason="File inspection is read-only.",
                     target=read_path,
@@ -822,12 +812,11 @@ def _steps_for_prompt_class(prompt_class: str, text: str, lower: str) -> list[St
             )
         else:
             steps.append(
-                StepDraft(
+                _tool_step(
                     title="Read common project files",
                     description="Read a compact set of common project files for context.",
                     tool_id="project.read_many",
                     payload={"paths": _default_read_many_paths()},
-                    risk_level=READ_RISK,
                     rollback_note="No rollback needed for reads.",
                     reason="Context gathering remains read-only.",
                     target="workspace:core-files",
@@ -836,34 +825,31 @@ def _steps_for_prompt_class(prompt_class: str, text: str, lower: str) -> list[St
         return steps
     if prompt_class == "diff_inspection":
         return _repo_baseline_steps() + [
-            StepDraft(
+            _tool_step(
                 title="Review repository diff",
                 description="Inspect repository diff statistics.",
                 tool_id="git.diff",
                 payload={"cwd": "."},
-                risk_level=READ_RISK,
                 rollback_note="No rollback needed for reads.",
                 reason="Diff inspection is read-only.",
                 target="git:diff",
             ),
-            StepDraft(
+            _tool_step(
                 title="Review recent commits",
                 description="Inspect recent git history for context.",
                 tool_id="git.log",
                 payload={"cwd": "."},
-                risk_level=READ_RISK,
                 rollback_note="No rollback needed for reads.",
                 reason="Git history is read-only.",
                 target="git:log",
             ),
         ]
     return _repo_baseline_steps() + [
-        StepDraft(
+        _tool_step(
             title="Review recent commits",
             description="Inspect recent git history for context.",
             tool_id="git.log",
             payload={"cwd": "."},
-            risk_level=READ_RISK,
             rollback_note="No rollback needed for reads.",
             reason="Git history is read-only.",
             target="git:log",
@@ -873,22 +859,20 @@ def _steps_for_prompt_class(prompt_class: str, text: str, lower: str) -> list[St
 
 def _repo_baseline_steps() -> list[StepDraft]:
     return [
-        StepDraft(
+        _tool_step(
             title="Inspect repository status",
             description="Gather repository status before any further action.",
             tool_id="git.status",
             payload={"cwd": "."},
-            risk_level=READ_RISK,
             rollback_note="No rollback needed for reads.",
             reason="Read-only repository inspection is safe to auto-run.",
             target="workspace:.",
         ),
-        StepDraft(
+        _tool_step(
             title="List project tree",
             description="List a compact workspace tree for orientation.",
             tool_id="project.tree",
             payload={"path": ".", "max_entries": 40},
-            risk_level=READ_RISK,
             rollback_note="No rollback needed for reads.",
             reason="Workspace tree inspection is read-only.",
             target="workspace:tree",
@@ -959,3 +943,75 @@ def _step_reason(step: aiosqlite.Row) -> str:
     if step["risk_level"] == WRITE_RISK:
         return "This step can mutate the workspace or environment."
     return "Read-only action."
+
+
+def _approval_insert_values(task_id: str, step: aiosqlite.Row) -> tuple[str, ...]:
+    return (
+        str(uuid.uuid4()),
+        task_id,
+        step["id"],
+        step["title"],
+        _step_target(step),
+        step["tool_id"] or "rust.delegate",
+        step["risk_level"],
+        _step_reason(step),
+        step["rollback_note"] or "",
+    )
+
+
+def _tool_step(
+    title: str,
+    description: str,
+    tool_id: str,
+    payload: dict[str, Any],
+    rollback_note: str,
+    reason: str,
+    target: str,
+) -> StepDraft:
+    policy = get_tool_policy(tool_id)
+    return StepDraft(
+        title=title,
+        description=description,
+        tool_id=tool_id,
+        payload=payload,
+        risk_level=policy.risk_level,
+        rollback_note=rollback_note,
+        reason=reason,
+        target=target,
+    )
+
+
+def _privileged_step(
+    title: str,
+    description: str,
+    payload: dict[str, Any],
+    rollback_note: str,
+    reason: str,
+    target: str,
+) -> StepDraft:
+    return StepDraft(
+        title=title,
+        description=description,
+        tool_id=None,
+        payload=payload,
+        risk_level=PRIVILEGED_RISK,
+        rollback_note=rollback_note,
+        reason=reason,
+        target=target,
+    )
+
+
+def _normalize_step(step: StepDraft) -> StepDraft:
+    if not step.tool_id:
+        return step
+    policy = get_tool_policy(step.tool_id)
+    return StepDraft(
+        title=step.title,
+        description=step.description,
+        tool_id=step.tool_id,
+        payload=step.payload,
+        risk_level=policy.risk_level,
+        rollback_note=step.rollback_note,
+        reason=step.reason,
+        target=step.target,
+    )
