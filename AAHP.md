@@ -6,6 +6,11 @@
 2. `build/BUILD_BLUEPRINT.md`
 3. `AAHP.md`
 
+Release tracking:
+
+- `release.json` = current repo version + milestone marker
+- `CHANGELOG.md` = compact milestone history
+
 ## Product Role
 
 Oxy is:

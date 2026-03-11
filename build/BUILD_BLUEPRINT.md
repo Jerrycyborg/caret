@@ -142,6 +142,8 @@ Centralized build-maintenance files:
 - `build/Core_blueprint.md`
 - `build/BUILD_BLUEPRINT.md`
 - `AAHP.md`
+- `release.json`
+- `CHANGELOG.md`
 
 ## Acceptance Gates
 
@@ -209,6 +211,7 @@ When resuming work:
 1. read `build/Core_blueprint.md` for product direction
 2. read `build/BUILD_BLUEPRINT.md` for build/release constraints
 3. read `AAHP.md` for current implementation state
+4. check `release.json` and `CHANGELOG.md` before cutting or describing a milestone
 
 Do not create parallel roadmap or handoff files unless the repo explicitly adopts them as tracked sources of truth.
 

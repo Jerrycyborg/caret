@@ -178,6 +178,12 @@ npm run verify:rust
 npm run verify:all
 ```
 
+## Release Tracking
+
+- current version: `0.4.0`
+- machine-readable release state: [release.json](/Users/marshal/Library/CloudStorage/OneDrive-TWSPartnersAG/Dokumente/Internal%20projects/Oxy/release.json)
+- milestone history: [CHANGELOG.md](/Users/marshal/Library/CloudStorage/OneDrive-TWSPartnersAG/Dokumente/Internal%20projects/Oxy/CHANGELOG.md)
+
 Current local note:
 
 - `tsc && vite build` is passing
