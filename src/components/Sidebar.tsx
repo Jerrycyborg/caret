@@ -20,6 +20,7 @@ const BACKEND_URL = "http://localhost:8000";
 
 const navItems: { id: View; label: string; icon: string }[] = [
   { id: "chat", label: "Chat", icon: "💬" },
+  { id: "tasks", label: "Tasks", icon: "🧭" },
   { id: "files", label: "Files", icon: "📁" },
   { id: "terminal", label: "Terminal", icon: "⌨️" },
   { id: "resources", label: "Resources", icon: "📊" },

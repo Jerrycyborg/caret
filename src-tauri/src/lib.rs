@@ -1,10 +1,12 @@
 pub mod plugins;
+mod privilege;
 mod tools;
 use plugins::oxy_plugin::{discover_plugins, install_plugin, list_plugins, run_plugin, toggle_plugin_enabled};
-use serde::{Deserialize, Serialize};
+use privilege::{execute_privileged_action, preview_privileged_action};
+use serde::Serialize;
 use std::ffi::OsStr;
 use std::process::Command;
-use tools::list_tool_adapters;
+use tools::{execute_tool_adapter, list_tool_adapters};
 
 fn run_command<I, S>(program: &str, args: I) -> Result<String, String>
 where
@@ -34,21 +36,6 @@ where
     }
 }
 
-fn is_safe_identifier(value: &str) -> bool {
-    !value.is_empty()
-        && value
-            .bytes()
-            .all(|byte| matches!(byte, b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_' | b'-' | b'.' | b'@'))
-}
-
-fn ensure_safe_identifier(kind: &str, value: &str) -> Result<(), String> {
-    if is_safe_identifier(value) {
-        Ok(())
-    } else {
-        Err(format!("Invalid {kind}. Only letters, numbers, ., -, _, and @ are allowed."))
-    }
-}
-
 fn command_exists(program: &str) -> bool {
     Command::new(program).arg("--version").output().is_ok()
 }
@@ -59,260 +46,6 @@ pub struct ExecutionTargetInfo {
     pub label: String,
     pub available: bool,
     pub reason: String,
-}
-
-#[derive(Clone, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
-enum ServiceAction {
-    Start,
-    Stop,
-    Restart,
-}
-
-impl ServiceAction {
-    fn as_str(&self) -> &'static str {
-        match self {
-            Self::Start => "start",
-            Self::Stop => "stop",
-            Self::Restart => "restart",
-        }
-    }
-}
-
-#[derive(Clone, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-enum PrivilegedActionRequest {
-    Firewall { enabled: bool },
-    Service { name: String, action: ServiceAction },
-    UserLock { name: String, lock: bool },
-    TerminateProcess { pid: u32 },
-}
-
-#[derive(Clone, Serialize)]
-struct PrivilegedActionPreview {
-    action_type: String,
-    action_label: String,
-    target: String,
-    reason: String,
-    approval_required: bool,
-    mutating: bool,
-    platform: String,
-}
-
-#[derive(Clone, Serialize)]
-struct PrivilegedActionResult {
-    status: String,
-    action_type: String,
-    action_label: String,
-    target: String,
-    message: String,
-    details: Option<String>,
-    approval_required: bool,
-    mutating: bool,
-}
-
-fn current_platform() -> String {
-    if cfg!(target_os = "macos") {
-        "macos".to_string()
-    } else if cfg!(target_os = "linux") {
-        "ubuntu".to_string()
-    } else if cfg!(target_os = "windows") {
-        "windows".to_string()
-    } else {
-        "unsupported".to_string()
-    }
-}
-
-fn preview_for_action(request: &PrivilegedActionRequest) -> PrivilegedActionPreview {
-    match request {
-        PrivilegedActionRequest::Firewall { enabled } => PrivilegedActionPreview {
-            action_type: "firewall".to_string(),
-            action_label: if *enabled {
-                "Enable firewall".to_string()
-            } else {
-                "Disable firewall".to_string()
-            },
-            target: "system firewall".to_string(),
-            reason: "Firewall configuration changes affect host-level network protection.".to_string(),
-            approval_required: true,
-            mutating: true,
-            platform: current_platform(),
-        },
-        PrivilegedActionRequest::Service { name, action } => PrivilegedActionPreview {
-            action_type: "service".to_string(),
-            action_label: format!("{} service", action.as_str()),
-            target: name.clone(),
-            reason: "Service lifecycle changes modify running system processes and availability.".to_string(),
-            approval_required: true,
-            mutating: true,
-            platform: current_platform(),
-        },
-        PrivilegedActionRequest::UserLock { name, lock } => PrivilegedActionPreview {
-            action_type: "user_lock".to_string(),
-            action_label: if *lock {
-                "Lock user".to_string()
-            } else {
-                "Unlock user".to_string()
-            },
-            target: name.clone(),
-            reason: "User account changes alter who can access the machine.".to_string(),
-            approval_required: true,
-            mutating: true,
-            platform: current_platform(),
-        },
-        PrivilegedActionRequest::TerminateProcess { pid } => PrivilegedActionPreview {
-            action_type: "terminate_process".to_string(),
-            action_label: "Terminate process".to_string(),
-            target: format!("PID {pid}"),
-            reason: "Process termination interrupts a running system task or connection.".to_string(),
-            approval_required: true,
-            mutating: true,
-            platform: current_platform(),
-        },
-    }
-}
-
-fn classify_privileged_error(error: &str) -> &'static str {
-    let lower = error.to_lowercase();
-    if lower.contains("permission denied")
-        || lower.contains("not permitted")
-        || lower.contains("access is denied")
-        || lower.contains("requires administrator")
-        || lower.contains("interactive authentication required")
-    {
-        "insufficient_privileges"
-    } else if lower.contains("invalid ") || lower.contains("unknown plugin") {
-        "invalid_target"
-    } else if lower.contains("not supported") {
-        "unsupported_platform"
-    } else {
-        "execution_failed"
-    }
-}
-
-fn set_firewall_enabled(enabled: bool) -> Result<String, String> {
-    #[cfg(target_os = "macos")]
-    return run_command("/sbin/pfctl", if enabled { vec!["-e"] } else { vec!["-d"] });
-    #[cfg(target_os = "linux")]
-    return run_command("ufw", if enabled { vec!["enable"] } else { vec!["disable"] });
-    #[cfg(target_os = "windows")]
-    return run_command(
-        "netsh",
-        if enabled {
-            vec!["advfirewall", "set", "allprofiles", "state", "on"]
-        } else {
-            vec!["advfirewall", "set", "allprofiles", "state", "off"]
-        },
-    );
-
-    #[allow(unreachable_code)]
-    Err("Firewall control is not supported on this platform.".to_string())
-}
-
-fn control_service(name: String, action: ServiceAction) -> Result<String, String> {
-    ensure_safe_identifier("service name", &name)?;
-
-    #[cfg(target_os = "macos")]
-    {
-        let target = format!("system/{name}");
-        return match action {
-            ServiceAction::Start | ServiceAction::Restart => {
-                run_command("launchctl", ["kickstart", "-k", target.as_str()])
-            }
-            ServiceAction::Stop => run_command("launchctl", ["kill", "TERM", target.as_str()]),
-        };
-    }
-    #[cfg(target_os = "linux")]
-    {
-        return run_command("systemctl", [action.as_str(), name.as_str()]);
-    }
-    #[cfg(target_os = "windows")]
-    {
-        return match action {
-            ServiceAction::Start => run_command(
-                "powershell",
-                ["-Command", &format!("Start-Service -Name '{}'", name)],
-            ),
-            ServiceAction::Stop => run_command(
-                "powershell",
-                ["-Command", &format!("Stop-Service -Name '{}'", name)],
-            ),
-            ServiceAction::Restart => run_command(
-                "powershell",
-                ["-Command", &format!("Restart-Service -Name '{}'", name)],
-            ),
-        };
-    }
-
-    #[allow(unreachable_code)]
-    Err("Service control is not supported on this platform.".to_string())
-}
-
-fn lock_user(name: String, lock: bool) -> Result<String, String> {
-    ensure_safe_identifier("user name", &name)?;
-
-    #[cfg(target_os = "macos")]
-    return run_command(
-        "pwpolicy",
-        if lock {
-            vec!["-u", name.as_str(), "-setpolicy", "isDisabled=1"]
-        } else {
-            vec!["-u", name.as_str(), "-setpolicy", "isDisabled=0"]
-        },
-    );
-    #[cfg(target_os = "linux")]
-    return run_command(
-        "usermod",
-        if lock {
-            vec!["-L", name.as_str()]
-        } else {
-            vec!["-U", name.as_str()]
-        },
-    );
-    #[cfg(target_os = "windows")]
-    return run_command(
-        "net",
-        if lock {
-            vec!["user", name.as_str(), "/active:no"]
-        } else {
-            vec!["user", name.as_str(), "/active:yes"]
-        },
-    );
-
-    #[allow(unreachable_code)]
-    Err("User locking is not supported on this platform.".to_string())
-}
-
-fn terminate_connection(pid: u32) -> Result<String, String> {
-    #[cfg(target_os = "macos")]
-    {
-        let pid_string = pid.to_string();
-        return run_command("kill", ["-9", pid_string.as_str()]);
-    }
-    #[cfg(target_os = "linux")]
-    {
-        let pid_string = pid.to_string();
-        return run_command("kill", ["-9", pid_string.as_str()]);
-    }
-    #[cfg(target_os = "windows")]
-    {
-        let pid_string = pid.to_string();
-        return run_command("taskkill", ["/PID", pid_string.as_str(), "/F"]);
-    }
-
-    #[allow(unreachable_code)]
-    Err("Connection termination is not supported on this platform.".to_string())
-}
-
-fn execute_privileged_action_inner(request: &PrivilegedActionRequest) -> Result<String, String> {
-    match request {
-        PrivilegedActionRequest::Firewall { enabled } => set_firewall_enabled(*enabled),
-        PrivilegedActionRequest::Service { name, action } => {
-            control_service(name.clone(), action.clone())
-        }
-        PrivilegedActionRequest::UserLock { name, lock } => lock_user(name.clone(), *lock),
-        PrivilegedActionRequest::TerminateProcess { pid } => terminate_connection(*pid),
-    }
 }
 
 fn detect_execution_targets() -> Vec<ExecutionTargetInfo> {
@@ -364,53 +97,6 @@ fn detect_execution_targets() -> Vec<ExecutionTargetInfo> {
     targets
 }
 
-#[tauri::command]
-fn preview_privileged_action(request: PrivilegedActionRequest) -> PrivilegedActionPreview {
-    preview_for_action(&request)
-}
-
-#[tauri::command]
-fn execute_privileged_action(
-    request: PrivilegedActionRequest,
-    approved: bool,
-) -> PrivilegedActionResult {
-    let preview = preview_for_action(&request);
-    if !approved {
-        return PrivilegedActionResult {
-            status: "denied".to_string(),
-            action_type: preview.action_type,
-            action_label: preview.action_label,
-            target: preview.target,
-            message: "Action canceled before execution.".to_string(),
-            details: None,
-            approval_required: true,
-            mutating: true,
-        };
-    }
-
-    match execute_privileged_action_inner(&request) {
-        Ok(message) => PrivilegedActionResult {
-            status: "executed".to_string(),
-            action_type: preview.action_type,
-            action_label: preview.action_label,
-            target: preview.target,
-            message: "Sensitive OS action executed.".to_string(),
-            details: Some(message),
-            approval_required: true,
-            mutating: true,
-        },
-        Err(error) => PrivilegedActionResult {
-            status: classify_privileged_error(&error).to_string(),
-            action_type: preview.action_type,
-            action_label: preview.action_label,
-            target: preview.target,
-            message: "Sensitive OS action failed safely.".to_string(),
-            details: Some(error),
-            approval_required: true,
-            mutating: true,
-        },
-    }
-}
 use sysinfo::{CpuRefreshKind, Disks, MemoryRefreshKind, ProcessRefreshKind, RefreshKind, System};
 
 #[derive(Serialize)]
@@ -626,6 +312,7 @@ pub fn run() {
             discover_plugins,
             install_plugin,
             list_tool_adapters,
+            execute_tool_adapter,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Oxy");

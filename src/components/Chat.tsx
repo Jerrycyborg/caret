@@ -11,6 +11,17 @@ interface ChatProps {
   conversationId: string | null;
   onConversationCreated: (id: string) => void;
   onConversationUpdated: () => void;
+  onOpenTask: (id: string) => void;
+}
+
+interface TaskHandoff {
+  task_id: string;
+  title: string;
+  summary: string;
+  risk_level: string;
+  status: string;
+  next_suggested_action: string;
+  result_summary?: string;
 }
 
 const BACKEND_URL = "http://localhost:8000";
@@ -19,12 +30,14 @@ export default function Chat({
   conversationId,
   onConversationCreated,
   onConversationUpdated,
+  onOpenTask,
 }: ChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [model, setModel] = useState("ollama/llama3.2");
   const [isStreaming, setIsStreaming] = useState(false);
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
+  const [taskHandoff, setTaskHandoff] = useState<TaskHandoff | null>(null);
   const activeConvRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -43,6 +56,7 @@ export default function Chat({
     activeConvRef.current = conversationId;
     if (!conversationId) {
       setMessages([]);
+      setTaskHandoff(null);
       return;
     }
     fetch(`${BACKEND_URL}/v1/conversations/${conversationId}`)
@@ -91,6 +105,7 @@ export default function Chat({
     setMessages((prev) => [...prev, userMsg, { id: assistantId, role: "assistant", content: "" }]);
     setInput("");
     setIsStreaming(true);
+    setTaskHandoff(null);
 
     try {
       const response = await fetch(`${BACKEND_URL}/v1/chat`, {
@@ -131,6 +146,9 @@ export default function Chat({
                   m.id === assistantId ? { ...m, content: m.content + parsed.content } : m
                 )
               );
+            }
+            if (parsed.task_handoff) {
+              setTaskHandoff(parsed.task_handoff);
             }
           } catch {
             // skip malformed chunks
@@ -184,6 +202,22 @@ export default function Chat({
             </div>
           </div>
         ))}
+        {taskHandoff && (
+          <div className="chat-task-handoff">
+            <div className="chat-task-top">
+              <strong>{taskHandoff.title}</strong>
+              <span className={`task-risk risk-${taskHandoff.risk_level}`}>{taskHandoff.risk_level}</span>
+            </div>
+            <div className="chat-task-body">{taskHandoff.summary}</div>
+            {taskHandoff.result_summary && (
+              <div className="chat-task-body">{taskHandoff.result_summary}</div>
+            )}
+            <div className="chat-task-body">{taskHandoff.next_suggested_action}</div>
+            <button className="chat-task-button" onClick={() => onOpenTask(taskHandoff.task_id)}>
+              Open Task
+            </button>
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
 

@@ -19,9 +19,12 @@ Ship a Linux build that is reproducible in CI and manually smoke-tested before r
 - [ ] Chat round-trip works
 - [ ] Files, Terminal, and Resources panels open successfully
 - [ ] Tool adapters are listed with health and capability metadata
+- [ ] Reference CLI adapter executes and returns structured output
 - [ ] Execution targets are shown in the Resources view
 - [ ] Security panel fails safely when privileges are unavailable
 - [ ] Security panel requires explicit approval before any mutation
+- [ ] Approved privileged actions attempt execution via `sudo`
+- [ ] Denied or failed `sudo` auth leaves system state unchanged
 - [ ] Plugin install state persists across restart
 
 ## Release Notes

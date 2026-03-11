@@ -3,7 +3,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-from routers import chat, models, conversations, settings
+from routers import chat, models, conversations, settings, tasks
 from database import init_db, get_db_path
 import aiosqlite
 
@@ -55,6 +55,7 @@ app.include_router(chat.router, prefix="/v1")
 app.include_router(models.router, prefix="/v1")
 app.include_router(conversations.router, prefix="/v1")
 app.include_router(settings.router, prefix="/v1")
+app.include_router(tasks.router, prefix="/v1")
 
 
 @app.get("/health")

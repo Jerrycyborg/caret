@@ -2,16 +2,14 @@
 
 ## Why This Build Exists
 
-Based on the current project checkpoint and repository docs, Oxy exists to become a deeply OS-integrated AI desktop assistant, not just a chat shell.
+This build exists to ship Oxy as an internal operator shell on macOS and Ubuntu.
 
-This is the intended product direction:
+Near-term product goal:
 
-- Use local OS capabilities directly from a desktop app.
-- Combine a desktop shell, Python AI backend, and local system tooling into one operator surface.
-- Grow toward plugins, hardware-aware execution, and multi-agent workflows.
-- Ship first on macOS and Ubuntu with a release process that is repeatable and supportable.
-
-This statement is an explicit build assumption derived from `AAHP.md` and `README.md`, so the repo has a documented build purpose instead of implied context.
+- supervised orchestration over local tools and machine resources
+- approval-first execution for writes and privileged actions
+- compact task, approval, and timeline flow across chat and task UI
+- repeatable local and CI verification
 
 ## Release Goal
 
@@ -35,22 +33,30 @@ V1 ships as an internal-only operator shell for power users on macOS and Ubuntu.
 
 - autonomous operator shell over local OS capabilities and your existing tool ecosystem
 - high workflow autonomy for planning and multi-step execution
-- hard approval boundaries for sensitive system mutations
-- adapter-first integration for a few critical tools, not broad shallow coverage
+- in-app approval plus OS-native auth boundaries for sensitive system mutations
+- adapter-first integration for a few critical tools, with local CLI adapters first
 - hardware-aware detect-and-route execution, not deep vendor-specific optimization
 
 ### In Scope for V1
 
-- chat and backend orchestration
-- system inspection and resource awareness
-- execution target detection for CPU/GPU/NPU-style routing signals
-- plugin and tool adapter foundation
-- a small number of critical tool-adapter contracts
-- privileged OS actions with explicit approval:
-  - firewall enable/disable
-  - service start/stop/restart
-  - user lock/unlock
-  - process termination
+- chat with optional task handoff
+- backend task orchestrator with ordered steps and timeline events
+- deterministic prompt classes for supervised task planning
+- approval-first execution for backend writes
+- compact local tool registry:
+  - `file.read`
+  - `file.write`
+  - `git.status`
+  - `git.diff`
+  - `git.log`
+  - `git.show`
+  - `project.search`
+  - `project.tree`
+  - `project.read_many`
+  - bounded `shell.run`
+  - allowlisted `build.run`
+- privileged OS actions with explicit approval and Rust-only routing
+- task list, approval panel, and execution timeline
 
 ### Non-Goals for V1
 
@@ -121,9 +127,12 @@ Centralized build-maintenance files:
 - [ ] Backend starts with `npm run backend`
 - [ ] Desktop app starts with `npm run tauri dev`
 - [ ] Chat works against the backend
-- [ ] Plugin flows use the compiled Rust plugin module
+- [ ] Action-oriented chat can emit a task handoff
+- [ ] Task handoff can include immediate read-only execution summary
+- [ ] Read-only task steps auto-run and record timeline events
+- [ ] Write steps stop for approval and do not execute early
 - [ ] Tool adapters are visible through a common registry/contract
-- [ ] Execution targets are visible through a common resource model
+- [ ] `project.search` executes within workspace bounds
 - [ ] Security actions fail safely when privileges are unavailable
 
 ### Gate C: Platform Readiness
@@ -146,12 +155,11 @@ Centralized build-maintenance files:
 
 ## Production Risks Still Open
 
-The repo is improving, but these are still real release risks:
-
-- privileged OS actions do not yet have a production privilege/elevation model
-- plugin and tool adapter distribution are still internal/demo level
-- end-to-end smoke coverage is still thin
-- packaging/signing ownership is not yet encoded in the repo
+- privileged OS actions still need full release-grade elevation hardening
+- backend approval policy is stronger, but not yet unified across every UI mutation path
+- browser/API adapters are deferred
+- hardware/model routing is deferred
+- packaging/signing ownership is still not encoded in the repo
 
 ## Operating Rule
 

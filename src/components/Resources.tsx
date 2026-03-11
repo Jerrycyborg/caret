@@ -17,6 +17,12 @@ interface ToolAdapterInfo {
   error_contract: string;
   orchestration_role: string;
 }
+interface ToolAdapterExecutionResult {
+  status: string;
+  adapter_id: string;
+  output?: string | null;
+  error?: string | null;
+}
 interface SystemInfo {
   cpu: CpuInfo;
   mem: MemInfo;
@@ -36,6 +42,7 @@ function GaugeBar({ pct, color }: { pct: number; color: string }) {
 export default function Resources() {
   const [info, setInfo] = useState<SystemInfo | null>(null);
   const [adapters, setAdapters] = useState<ToolAdapterInfo[]>([]);
+  const [adapterResult, setAdapterResult] = useState<ToolAdapterExecutionResult | null>(null);
   const [error, setError] = useState("");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -66,6 +73,17 @@ export default function Resources() {
 
   const cpuColor = info.cpu.usage > 80 ? "var(--danger)" : info.cpu.usage > 50 ? "#f59e0b" : "var(--success)";
   const memColor = info.mem.used_pct > 80 ? "var(--danger)" : info.mem.used_pct > 60 ? "#f59e0b" : "var(--accent)";
+
+  const runReferenceAdapter = async () => {
+    try {
+      const result = await invoke<ToolAdapterExecutionResult>("execute_tool_adapter", {
+        request: { adapter_id: "reference_cli", input: "oxy-reference-check" },
+      });
+      setAdapterResult(result);
+    } catch (e) {
+      setError(String(e));
+    }
+  };
 
   return (
     <div className="resources">
@@ -121,6 +139,22 @@ export default function Resources() {
       </div>
 
       <div className="res-section-title">Tool Adapters</div>
+      <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+        <button onClick={runReferenceAdapter}>Run reference adapter smoke</button>
+      </div>
+      {adapterResult && (
+        <div className="res-card" style={{ marginBottom: 16 }}>
+          <div className="res-card-label">Reference Adapter Result</div>
+          <div
+            className="res-card-value"
+            style={{ color: adapterResult.status === "executed" ? "var(--success)" : "var(--danger)", fontSize: 18 }}
+          >
+            {adapterResult.status}
+          </div>
+          {adapterResult.output && <div className="res-card-sub">Output: {adapterResult.output}</div>}
+          {adapterResult.error && <div className="res-card-sub">Error: {adapterResult.error}</div>}
+        </div>
+      )}
       <div className="res-grid">
         {adapters.map((adapter) => (
           <div key={adapter.id} className="res-card">
@@ -134,6 +168,7 @@ export default function Resources() {
             <div className="res-card-sub">{adapter.orchestration_role}</div>
             <div className="res-card-sub">Type: {adapter.adapter_type}</div>
             <div className="res-card-sub">Capabilities: {adapter.capabilities.join(", ")}</div>
+            <div className="res-card-sub">Input: {adapter.input_contract}</div>
           </div>
         ))}
       </div>

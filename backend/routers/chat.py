@@ -7,6 +7,7 @@ from pydantic import BaseModel
 import litellm
 import aiosqlite
 from database import get_db_path
+from services.orchestrator import maybe_create_task
 
 router = APIRouter()
 
@@ -28,6 +29,8 @@ class ChatRequest(BaseModel):
 @router.post("/chat")
 async def chat(request: ChatRequest):
     messages = [{"role": m.role, "content": m.content} for m in request.messages]
+    latest_user_message = messages[-1]["content"] if messages and messages[-1]["role"] == "user" else ""
+    task_handoff = await maybe_create_task(latest_user_message, request.conversation_id) if latest_user_message else None
 
     # Persist user message before sending to LLM
     if request.conversation_id and messages and messages[-1]["role"] == "user":
@@ -54,6 +57,8 @@ async def chat(request: ChatRequest):
                 if request.conversation_id and collected:
                     await _save_message(request.conversation_id, "assistant", "".join(collected))
                     await _bump_conversation(request.conversation_id, request.model)
+                if task_handoff:
+                    yield f"data: {json.dumps({'task_handoff': task_handoff})}\n\n"
                 yield "data: [DONE]\n\n"
 
         return StreamingResponse(stream_response(), media_type="text/event-stream")
@@ -63,7 +68,7 @@ async def chat(request: ChatRequest):
     if request.conversation_id:
         await _save_message(request.conversation_id, "assistant", content)
         await _bump_conversation(request.conversation_id, request.model)
-    return {"content": content}
+    return {"content": content, "task_handoff": task_handoff}
 
 
 async def _save_message(conv_id: str, role: str, content: str):

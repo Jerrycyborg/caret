@@ -18,9 +18,12 @@ Ship a macOS desktop build that verifies locally, packages correctly, and is rev
 - [ ] Chat round-trip works
 - [ ] Files, Terminal, and Resources panels open successfully
 - [ ] Tool adapters are listed with health and capability metadata
+- [ ] Reference CLI adapter executes and returns structured output
 - [ ] Execution targets are shown in the Resources view
 - [ ] Security panel behavior is reviewed under normal user permissions
 - [ ] Security panel requires explicit approval before any mutation
+- [ ] Approved privileged actions trigger a GUI-native administrator prompt
+- [ ] Denied or canceled admin auth leaves system state unchanged
 - [ ] Plugin install state persists across restart
 
 ## Release Controls

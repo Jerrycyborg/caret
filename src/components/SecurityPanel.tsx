@@ -17,6 +17,7 @@ type PrivilegedActionPreview = {
   approval_required: boolean;
   mutating: boolean;
   platform: string;
+  execution_path: string;
 };
 
 type PrivilegedActionResult = {
@@ -144,6 +145,9 @@ export default function SecurityPanel() {
           </div>
           <div style={{ fontSize: 13, marginBottom: 10 }}>
             <b>Mutating:</b> {pendingAction.preview.mutating ? "Yes" : "No"} | <b>Platform:</b> {pendingAction.preview.platform}
+          </div>
+          <div style={{ fontSize: 13, marginBottom: 10 }}>
+            <b>Execution path:</b> {pendingAction.preview.execution_path}
           </div>
           <div style={{ display: "flex", gap: 10 }}>
             <button onClick={approveAction} disabled={submitting}>

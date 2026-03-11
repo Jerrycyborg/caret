@@ -1,66 +1,119 @@
+# Oxy
 
-<div align="center">
-	<h1>Oxy — AI OS Integration Assistant</h1>
-	<p>Cross-platform AI assistant with plugin architecture, hardware acceleration, and multi-agent orchestration.</p>
-</div>
+Oxy is an internal operator shell for macOS and Ubuntu built on Tauri, React, Rust, FastAPI, and SQLite.
 
----
+Current direction:
 
-## Features
+- supervised task orchestration instead of chat-only interaction
+- approval-first execution for writes
+- Rust-only routing for privileged OS actions
+- compact local adapter layer for repo and workflow tasks
 
-- Plugin marketplace for extensibility and custom skills
-- Hardware acceleration (GPU, NPU, etc.) for high-performance AI workloads
-- Multi-agent orchestration for parallel, collaborative, or specialized AI tasks
-- Deep OS integration (Tauri 2, Rust, React 19/TS, FastAPI/Python)
-- User-friendly UI with security and onboarding panels
+The current source-of-truth order is:
 
-## Prerequisites
+1. `build/Core_blueprint.md`
+2. `build/BUILD_BLUEPRINT.md`
+3. `AAHP.md`
 
-- [Node.js](https://nodejs.org/) (v18+ recommended)
-- [Rust](https://www.rust-lang.org/tools/install)
-- [Python 3.9+](https://www.python.org/downloads/) (for FastAPI backend)
-- [VS Code](https://code.visualstudio.com/) (recommended)
+## Current Capabilities
 
-## Installation
+- chat with conversation persistence
+- task planning from action-oriented prompts
+- ordered task steps with timeline events
+- read steps that auto-run
+- write steps that pause for approval
+- privileged actions delegated to the Rust security path
+- local adapters for:
+  - `file.read`
+  - `file.write`
+  - `git.status`
+  - `git.diff`
+  - `git.log`
+  - `git.show`
+  - `project.search`
+  - `project.tree`
+  - `project.read_many`
+  - bounded `shell.run`
+  - allowlisted `build.run`
 
-Clone the repository:
+## Stack
 
-```sh
-git clone https://github.com/Jerrycyborg/oxy.git
-cd oxy
-```
+- Tauri 2
+- React 19 + TypeScript
+- Rust
+- FastAPI
+- SQLite
 
-Install dependencies:
+## Development
+
+Prerequisites:
+
+- Node.js 18+
+- Rust toolchain
+- Python 3.9+
+
+Install:
 
 ```sh
 npm install
 ```
 
-## Build & Run
+Run backend:
 
-### Development (hot reload)
+```sh
+npm run backend
+```
+
+Run desktop app:
 
 ```sh
 npm run tauri dev
 ```
 
-### Production build
+## Verification
+
+Frontend verification:
 
 ```sh
-npm run build
-npx tauri build
+npm run verify:frontend
 ```
 
-## Usage
+Rust verification:
 
-- Launch the app and use the sidebar to access Chat, Files, Terminal, Security, Settings, and the Plugin Marketplace.
-- Install and manage plugins from the Marketplace panel.
-- Security and onboarding panels are designed for non-technical users.
+```sh
+npm run verify:rust
+```
 
-## Contributing
+Full local target:
 
-Pull requests and issues are welcome! Please follow conventional commit messages and ensure all code is linted and tested before submitting.
+```sh
+npm run verify:all
+```
 
-## License
+Note:
 
-MIT License
+- on this cloud-synced workspace, Jest has intermittently failed with filesystem `ETIMEDOUT` reads from `node_modules`
+- `tsc && vite build` and backend import/startup checks are currently passing
+
+## Scope Boundaries
+
+Current priority:
+
+- orchestrator hardening
+- unified approval policy
+- local adapter growth
+- tighter chat/task integration
+
+Deferred:
+
+- browser/API adapters
+- plugin sandbox and plugin manifest
+- hardware/model routing
+- multi-agent orchestration
+
+## Repo Guidance
+
+- extend the current repo; do not redesign it
+- keep privileged OS actions in Rust
+- prefer small additive backend/frontend changes
+- keep docs compact and update only the tracked source-of-truth files

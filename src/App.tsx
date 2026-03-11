@@ -7,14 +7,16 @@ import Terminal from "./components/Terminal";
 import Files from "./components/Files";
 import SecurityPanel from "./components/SecurityPanel";
 import PluginMarketplace from "./components/PluginMarketplace";
+import TasksPanel from "./components/TasksPanel";
 import "./App.css";
 
-export type View = "chat" | "files" | "terminal" | "resources" | "security" | "settings" | "marketplace";
+export type View = "chat" | "tasks" | "files" | "terminal" | "resources" | "security" | "settings" | "marketplace";
 
 function App() {
   const [view, setView] = useState<View>("chat");
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [sidebarKey, setSidebarKey] = useState(0);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
 
   const handleConvCreated = useCallback((id: string) => {
     setActiveConvId(id);
@@ -23,6 +25,11 @@ function App() {
 
   const handleConvUpdated = useCallback(() => {
     setSidebarKey((k) => k + 1);
+  }, []);
+
+  const handleOpenTask = useCallback((taskId: string) => {
+    setActiveTaskId(taskId);
+    setView("tasks");
   }, []);
 
   return (
@@ -41,8 +48,10 @@ function App() {
             conversationId={activeConvId}
             onConversationCreated={handleConvCreated}
             onConversationUpdated={handleConvUpdated}
+            onOpenTask={handleOpenTask}
           />
         )}
+        {view === "tasks" && <TasksPanel initialTaskId={activeTaskId} />}
         {view === "settings" && <Settings />}
         {view === "resources" && <Resources />}
         {view === "terminal" && <Terminal />}
