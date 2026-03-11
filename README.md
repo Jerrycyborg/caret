@@ -1,93 +1,111 @@
 <div align="center">
 
+<pre>
+   ____  _   ___   __
+  / __ \| | / / | / /
+ / / / /| |/ /| |/ / 
+/ /_/ / |   / |   /  
+\____/  |_|\_\ |_|\_\ 
+</pre>
+
 # Oxy
 
-### Supervised AI operator shell for macOS and Ubuntu
+### Local-first AI operator hub for macOS and Ubuntu
 
 <p>
-  <strong>Tauri 2</strong> •
-  <strong>React 19</strong> •
-  <strong>Rust</strong> •
-  <strong>FastAPI</strong> •
+  <strong>Tauri 2</strong>
+  ·
+  <strong>React 19</strong>
+  ·
+  <strong>Rust</strong>
+  ·
+  <strong>FastAPI</strong>
+  ·
   <strong>SQLite</strong>
 </p>
 
-<p>
-  Plan → Ask → Execute → Observe → Suggest next move
-</p>
+<p><strong>Plan → Ask → Execute → Observe → Report back</strong></p>
 
 </div>
 
 ---
 
-## What Oxy Is
+> Oxy is the user-facing control layer.
+> It helps on the local machine, routes work to connected executors, and keeps results, approvals, and reporting in one place.
 
-Oxy is not a chat wrapper and not an unrestricted autonomous agent.
+## Why Oxy
 
-It is an internal operator shell that can:
+Oxy is being built as:
 
-- turn action-oriented prompts into supervised tasks
-- auto-run safe read steps
-- stop writes for approval
-- delegate privileged OS actions to the Rust layer
-- keep task state, approvals, executions, and policy events in one flow
+- a device-support assistant living on the machine
+- a developer-support assistant for local project work
+- a supervised operator shell for desktop, Telegram, and WhatsApp sessions
+- the main reporting surface above OpenClaw and Wraith
 
-## Current Product Shape
+It is not:
 
-Oxy currently works as a compact supervised kernel:
+- a chat-only wrapper
+- an unrestricted autonomous agent
+- a peer orchestrator beside OpenClaw or Wraith
 
-- chat with conversation persistence
-- backend task orchestrator
-- ordered step execution
-- approval-first workflow for mutations
-- execution timeline and approval panel
-- Rust-only privileged system path
+## Product Shape
 
-Current source-of-truth order:
+Oxy currently follows one control model:
 
-1. `build/Core_blueprint.md`
-2. `build/BUILD_BLUEPRINT.md`
-3. `AAHP.md`
+1. user asks through a session
+2. Oxy classifies the task
+3. Oxy plans the work
+4. Oxy asks for approval when required
+5. Oxy executes locally or delegates to an executor
+6. Oxy reports progress and results back into the session
 
 ## Architecture
 
-### Frontend
+| Layer | Responsibility |
+|---|---|
+| Frontend | Sessions, chat, tasks, approvals, timeline, operator console surfaces |
+| Backend | Orchestration, task routing, approval policy, executor selection, reporting |
+| Rust / Tauri | Privileged local OS actions, system inspection, machine control |
 
-- chat
-- tasks
-- approvals
-- execution timeline
-- system panels
+Core rule:
 
-### Backend
+- backend handles supervised task orchestration
+- Rust owns privileged local machine actions
+- OpenClaw and Wraith stay behind Oxy as executor systems
 
-- task planning
-- task and step state machine
-- approval policy
-- tool registry
-- execution logging
-- SQLite persistence
+## What Oxy Can Do Today
 
-### Rust / Tauri
+### Sessions and Reporting
 
-- system inspection
-- privileged OS actions
-- local machine control
+- desktop sessions
+- Telegram/WhatsApp session contracts
+- task and execution state attached to sessions
+- session source and state visible in the UI
 
-Rule:
+### Task System
 
-- backend handles repo and workflow actions
-- Rust handles privileged OS mutations
+- task classes:
+  - `device_support`
+  - `developer_support`
+  - `project_build`
+  - `security_assessment`
+  - `security_review`
+  - `general_local_assistance`
+- execution domains:
+  - `local_device`
+  - `local_dev`
+  - `openclaw`
+  - `wraith`
+- task-level plan approval
+- explicit privileged boundary approval
+- execution timeline and approval history
 
-## Current Capabilities
+### Executors
 
-### Task Flow
-
-- action-oriented chat can create a task handoff
-- deterministic prompt classes for supervised tasks
-- read steps auto-run
-- write steps wait for approval
-- privileged requests stay visible but are delegated to Rust
+- `local_device_executor`
+- `local_dev_executor`
+- `openclaw_executor`
+- `wraith_executor`
 
 ### Local Adapters
 
@@ -102,6 +120,15 @@ Rule:
 - `project.read_many`
 - bounded `shell.run`
 - allowlisted `build.run`
+
+## Current Direction
+
+The repo is moving toward a local-first operator hub where:
+
+- Oxy is the main UI and reporting surface
+- OpenClaw handles build and software execution work
+- Wraith handles specialist security workflows
+- device-level assistance remains a first-class local capability
 
 ## Quick Start
 
@@ -131,49 +158,45 @@ npm run tauri dev
 
 ## Verification
 
-Frontend:
-
 ```sh
 npm run verify:frontend
-```
-
-Rust:
-
-```sh
 npm run verify:rust
-```
-
-Full local target:
-
-```sh
 npm run verify:all
 ```
 
-Current note:
+Current local note:
 
 - `tsc && vite build` is passing
 - backend import/startup is passing
 - Jest has intermittently failed on this cloud-synced workspace with `ETIMEDOUT` reads from `node_modules`
 
-## Scope Boundaries
+## Source Of Truth
 
-### In Scope Now
+The repo should be resumed in this order:
+
+1. `build/Core_blueprint.md`
+2. `build/BUILD_BLUEPRINT.md`
+3. `AAHP.md`
+
+## Current Boundaries
+
+In scope now:
 
 - orchestrator hardening
-- approval policy unification
-- local adapter growth
-- tighter chat/task integration
+- executor integration contracts
+- approval and reporting cohesion
+- session-centric operator UX
 
-### Deferred
+Still deferred:
 
+- live OpenClaw integration
+- live Wraith integration
+- real Telegram/WhatsApp provider wiring
 - browser/API adapters
-- plugin sandbox and plugin manifest
+- plugin sandbox
 - hardware/model routing
-- multi-agent orchestration
+- autonomous multi-agent runtime
 
-## Repo Guidance
+## Repo Rule
 
-- extend the current repo; do not redesign it
-- keep privileged OS actions in Rust
-- prefer additive changes over broad refactors
-- keep docs compact and tracked through the blueprint chain
+Extend the current repo. Do not redesign it.
