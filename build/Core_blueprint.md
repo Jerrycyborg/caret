@@ -14,6 +14,12 @@ Use the source-of-truth order:
 
 Oxy is a supervised local orchestration kernel for macOS and Ubuntu.
 
+It is:
+
+- a local-first device and developer assistant
+- the main reporting surface for connected executor systems
+- the control layer above OpenClaw and Wraith
+
 Target behavior:
 
 - plan
@@ -31,6 +37,7 @@ Oxy is not just chat, not an unrestricted autonomous agent, and not yet a multi-
 Owns:
 
 - chat
+- session switching
 - tasks
 - approvals
 - execution timeline
@@ -41,9 +48,11 @@ Owns:
 Owns:
 
 - conversation context
+- multi-channel session routing
 - session/task orchestration
+- execution-domain routing
 - task and step state machine
-- approval-first execution policy
+- task-level approval policy with privileged boundaries
 - tool registry and safe local adapters
 
 ### Rust/Tauri
@@ -82,17 +91,32 @@ Local adapter layer:
 - project tree/read-many/search
 - bounded shell/build execution
 
+### Milestone 3
+
+Local hub + external executor alignment:
+
+- multi-channel sessions
+- task classes and execution domains
+- task-level approval with privileged boundaries
+- executor adapters for:
+  - local device support
+  - local developer support
+  - OpenClaw
+  - Wraith
+- desktop as the main reporting console
+
 ### Deferred
 
 - browser/API adapters
 - plugin sandbox and plugin manifest
 - hardware/model routing
-- multi-agent orchestration
+- autonomous multi-agent orchestration beyond supervised agent roles
 
 ## Operating Rules
 
 - extend the current repo, do not redesign it
 - prefer small additive backend services and routes
 - keep chat usable without requiring task creation
-- require approval before backend writes
+- use task-level approval by default for mutating plans
+- use explicit boundary approval for privileged local actions
 - keep docs compact and update only the tracked source-of-truth files

@@ -7,6 +7,7 @@ This build exists to ship Oxy as an internal operator shell on macOS and Ubuntu.
 Near-term product goal:
 
 - supervised orchestration over local tools and machine resources
+- Oxy as the main reporting/control surface for local and connected executors
 - approval-first execution for writes and privileged actions
 - compact task, approval, and timeline flow across chat and task UI
 - repeatable local and CI verification
@@ -40,9 +41,21 @@ V1 ships as an internal-only operator shell for power users on macOS and Ubuntu.
 ### In Scope for V1
 
 - chat with optional task handoff
+- multi-channel session metadata for desktop, Telegram, and WhatsApp
 - backend task orchestrator with ordered steps and timeline events
+- task classes and execution domains:
+  - `local_device`
+  - `local_dev`
+  - `openclaw`
+  - `wraith`
 - deterministic prompt classes for supervised task planning
-- approval-first execution for backend writes
+- task-level plan approval with privileged boundary stops
+- supervised agent-role state behind the orchestrator
+- structured executor adapters:
+  - `local_device_executor`
+  - `local_dev_executor`
+  - `openclaw_executor`
+  - `wraith_executor`
 - compact local tool registry:
   - `file.read`
   - `file.write`
@@ -112,7 +125,9 @@ Centralized build-maintenance files:
 - `build/config/`
 - `build/ci/`
 - `build/checklists/`
+- `build/Core_blueprint.md`
 - `build/BUILD_BLUEPRINT.md`
+- `AAHP.md`
 
 ## Acceptance Gates
 
@@ -127,11 +142,15 @@ Centralized build-maintenance files:
 - [ ] Backend starts with `npm run backend`
 - [ ] Desktop app starts with `npm run tauri dev`
 - [ ] Chat works against the backend
+- [ ] Session list can show channel source and session state
 - [ ] Action-oriented chat can emit a task handoff
 - [ ] Task handoff can include immediate read-only execution summary
+- [ ] Channel messages can resolve/create sessions and return compact replies
+- [ ] Tasks show execution domain, assigned executor, and approval scope
 - [ ] Read-only task steps auto-run and record timeline events
 - [ ] Write steps stop for approval and do not execute early
 - [ ] Tool adapters are visible through a common registry/contract
+- [ ] Executor adapters are visible through a common registry/contract
 - [ ] `project.search` executes within workspace bounds
 - [ ] Security actions fail safely when privileges are unavailable
 
@@ -157,9 +176,21 @@ Centralized build-maintenance files:
 
 - privileged OS actions still need full release-grade elevation hardening
 - backend approval policy is stronger, but not yet unified across every UI mutation path
+- OpenClaw and Wraith are adapter contracts only; live subsystem integration is still open
+- Telegram and WhatsApp are session/channel contracts only; provider wiring is still open
 - browser/API adapters are deferred
 - hardware/model routing is deferred
 - packaging/signing ownership is still not encoded in the repo
+
+## Handoff Rule
+
+When resuming work:
+
+1. read `build/Core_blueprint.md` for product direction
+2. read `build/BUILD_BLUEPRINT.md` for build/release constraints
+3. read `AAHP.md` for current implementation state
+
+Do not create parallel roadmap or handoff files unless the repo explicitly adopts them as tracked sources of truth.
 
 ## Operating Rule
 
