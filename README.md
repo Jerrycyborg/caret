@@ -1,70 +1,129 @@
+<div align="center">
+
 # Oxy
 
-Oxy is an internal operator shell for macOS and Ubuntu built on Tauri, React, Rust, FastAPI, and SQLite.
+### Supervised AI operator shell for macOS and Ubuntu
 
-Current direction:
+<p>
+  <strong>Tauri 2</strong> •
+  <strong>React 19</strong> •
+  <strong>Rust</strong> •
+  <strong>FastAPI</strong> •
+  <strong>SQLite</strong>
+</p>
 
-- supervised task orchestration instead of chat-only interaction
-- approval-first execution for writes
-- Rust-only routing for privileged OS actions
-- compact local adapter layer for repo and workflow tasks
+<p>
+  Plan → Ask → Execute → Observe → Suggest next move
+</p>
 
-The current source-of-truth order is:
+</div>
+
+---
+
+## What Oxy Is
+
+Oxy is not a chat wrapper and not an unrestricted autonomous agent.
+
+It is an internal operator shell that can:
+
+- turn action-oriented prompts into supervised tasks
+- auto-run safe read steps
+- stop writes for approval
+- delegate privileged OS actions to the Rust layer
+- keep task state, approvals, executions, and policy events in one flow
+
+## Current Product Shape
+
+Oxy currently works as a compact supervised kernel:
+
+- chat with conversation persistence
+- backend task orchestrator
+- ordered step execution
+- approval-first workflow for mutations
+- execution timeline and approval panel
+- Rust-only privileged system path
+
+Current source-of-truth order:
 
 1. `build/Core_blueprint.md`
 2. `build/BUILD_BLUEPRINT.md`
 3. `AAHP.md`
 
+## Architecture
+
+### Frontend
+
+- chat
+- tasks
+- approvals
+- execution timeline
+- system panels
+
+### Backend
+
+- task planning
+- task and step state machine
+- approval policy
+- tool registry
+- execution logging
+- SQLite persistence
+
+### Rust / Tauri
+
+- system inspection
+- privileged OS actions
+- local machine control
+
+Rule:
+
+- backend handles repo and workflow actions
+- Rust handles privileged OS mutations
+
 ## Current Capabilities
 
-- chat with conversation persistence
-- task planning from action-oriented prompts
-- ordered task steps with timeline events
-- read steps that auto-run
-- write steps that pause for approval
-- privileged actions delegated to the Rust security path
-- local adapters for:
-  - `file.read`
-  - `file.write`
-  - `git.status`
-  - `git.diff`
-  - `git.log`
-  - `git.show`
-  - `project.search`
-  - `project.tree`
-  - `project.read_many`
-  - bounded `shell.run`
-  - allowlisted `build.run`
+### Task Flow
 
-## Stack
+- action-oriented chat can create a task handoff
+- deterministic prompt classes for supervised tasks
+- read steps auto-run
+- write steps wait for approval
+- privileged requests stay visible but are delegated to Rust
 
-- Tauri 2
-- React 19 + TypeScript
-- Rust
-- FastAPI
-- SQLite
+### Local Adapters
 
-## Development
+- `file.read`
+- `file.write`
+- `git.status`
+- `git.diff`
+- `git.log`
+- `git.show`
+- `project.search`
+- `project.tree`
+- `project.read_many`
+- bounded `shell.run`
+- allowlisted `build.run`
 
-Prerequisites:
+## Quick Start
+
+### Prerequisites
 
 - Node.js 18+
 - Rust toolchain
 - Python 3.9+
 
-Install:
+### Install
 
 ```sh
 npm install
 ```
 
-Run backend:
+### Run Backend
 
 ```sh
 npm run backend
 ```
 
-Run desktop app:
+### Run Desktop App
 
 ```sh
 npm run tauri dev
@@ -72,13 +131,13 @@ npm run tauri dev
 
 ## Verification
 
-Frontend verification:
+Frontend:
 
 ```sh
 npm run verify:frontend
 ```
 
-Rust verification:
+Rust:
 
 ```sh
 npm run verify:rust
@@ -90,21 +149,22 @@ Full local target:
 npm run verify:all
 ```
 
-Note:
+Current note:
 
-- on this cloud-synced workspace, Jest has intermittently failed with filesystem `ETIMEDOUT` reads from `node_modules`
-- `tsc && vite build` and backend import/startup checks are currently passing
+- `tsc && vite build` is passing
+- backend import/startup is passing
+- Jest has intermittently failed on this cloud-synced workspace with `ETIMEDOUT` reads from `node_modules`
 
 ## Scope Boundaries
 
-Current priority:
+### In Scope Now
 
 - orchestrator hardening
-- unified approval policy
+- approval policy unification
 - local adapter growth
 - tighter chat/task integration
 
-Deferred:
+### Deferred
 
 - browser/API adapters
 - plugin sandbox and plugin manifest
@@ -115,5 +175,5 @@ Deferred:
 
 - extend the current repo; do not redesign it
 - keep privileged OS actions in Rust
-- prefer small additive backend/frontend changes
-- keep docs compact and update only the tracked source-of-truth files
+- prefer additive changes over broad refactors
+- keep docs compact and tracked through the blueprint chain
