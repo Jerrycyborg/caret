@@ -1,12 +1,6 @@
 <div align="center">
 
-<pre>
-   ____  _   ___   __
-  / __ \| | / / | / /
- / / / /| |/ /| |/ / 
-/ /_/ / |   / |   /  
-\____/  |_|\_\ |_|\_\ 
-</pre>
+<img src="assets/readme-banner.svg" alt="Oxy banner" width="100%" />
 
 # Oxy
 
