@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
+from services.executors import executor_registry_payload
 from services.orchestrator import create_task, get_task, list_tasks, resolve_approval, retry_step
 from services.tool_registry import registry_payload
 
@@ -21,8 +22,8 @@ class ResolveApprovalRequest(BaseModel):
 
 
 @router.get("/tasks")
-async def tasks_index():
-    return {"tasks": await list_tasks()}
+async def tasks_index(task_kind: Optional[str] = Query(default=None)):
+    return {"tasks": await list_tasks(task_kind=task_kind)}
 
 
 @router.post("/tasks/plan")
@@ -60,3 +61,8 @@ async def tasks_retry(task_id: str, step_id: str):
 @router.get("/tools")
 async def tools_index():
     return {"tools": registry_payload()}
+
+
+@router.get("/executors")
+async def executors_index():
+    return {"executors": executor_registry_payload()}

@@ -19,6 +19,10 @@ function fileIcon(name: string, isDir: boolean): string {
   return EXT_ICONS[ext] ?? "FILE";
 }
 
+function isTauriRuntime(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
 export default function Files() {
   const [homeDir, setHomeDir] = useState("");
   const [cwd, setCwd] = useState("");
@@ -49,6 +53,10 @@ export default function Files() {
   }, []);
 
   useEffect(() => {
+    if (!isTauriRuntime()) {
+      setError("Files panel requires the Tauri desktop runtime.");
+      return;
+    }
     invoke<string>("get_home_dir").then((h) => {
       setHomeDir(h);
       loadDir(h);
@@ -74,6 +82,12 @@ export default function Files() {
   return (
     <div className="files-panel">
       <div className="files-title">Files</div>
+
+      {!isTauriRuntime() && (
+        <div className="files-notice">
+          Open this panel inside the desktop app. The web/dev preview cannot access local filesystem APIs.
+        </div>
+      )}
 
       <div className="files-bar">
         <button className="files-up-btn" onClick={goUp} disabled={stack.length === 0}>

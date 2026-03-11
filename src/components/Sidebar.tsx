@@ -5,6 +5,10 @@ interface Conversation {
   id: string;
   title: string;
   model: string;
+  channel_type: string;
+  session_status: string;
+  last_task_id?: string | null;
+  last_executor?: string | null;
 }
 
 interface SidebarProps {
@@ -19,11 +23,10 @@ interface SidebarProps {
 const BACKEND_URL = "http://localhost:8000";
 
 const navItems: { id: View; label: string; icon: string }[] = [
-  { id: "chat", label: "Chat", icon: "💬" },
-  { id: "tasks", label: "Tasks", icon: "🧭" },
-  { id: "files", label: "Files", icon: "📁" },
-  { id: "terminal", label: "Terminal", icon: "⌨️" },
-  { id: "resources", label: "Resources", icon: "📊" },
+  { id: "chat", label: "Sessions", icon: "💬" },
+  { id: "tasks", label: "Workflows", icon: "🧭" },
+  { id: "support", label: "Support", icon: "🩺" },
+  { id: "resources", label: "System", icon: "📊" },
   { id: "security", label: "Security", icon: "🔒" },
   { id: "marketplace", label: "Marketplace", icon: "🧩" },
   { id: "settings", label: "Settings", icon: "⚙️" },
@@ -76,6 +79,15 @@ export default function Sidebar({
               onClick={() => onSelectConv(c.id)}
             >
               <span className="conv-title">{c.title}</span>
+              <span className="conv-meta-row">
+                <span className={`conv-channel channel-${c.channel_type}`}>{c.channel_type}</span>
+                <span className={`conv-status status-${c.session_status}`}>{c.session_status}</span>
+                {c.last_executor && ["openclaw_executor", "wraith_executor"].includes(c.last_executor) && (
+                  <span className={`conv-link ${c.last_executor === "openclaw_executor" ? "link-openclaw" : "link-wraith"}`}>
+                    {c.last_executor === "openclaw_executor" ? "openclaw-linked" : "wraith-linked"}
+                  </span>
+                )}
+              </span>
             </button>
           ))}
           {conversations.length === 0 && (

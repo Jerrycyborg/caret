@@ -4,6 +4,10 @@ import { invoke } from "@tauri-apps/api/core";
 
 interface HistoryEntry { cmd: string; output: string; error?: string }
 
+function isTauriRuntime(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
 export default function Terminal() {
   const [input, setInput] = useState("");
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -16,6 +20,9 @@ export default function Terminal() {
   const histIdx = useRef(-1);
 
   useEffect(() => {
+    if (!isTauriRuntime()) {
+      return;
+    }
     invoke<string>("get_home_dir").then((h) => {
       setHomeDir(h);
       setCwd(h);
@@ -30,6 +37,10 @@ export default function Terminal() {
   const runCmd = useCallback(async (rawCmd: string) => {
     const cmd = rawCmd.trim();
     if (!cmd) return;
+    if (!isTauriRuntime()) {
+      setHistory((prev) => [...prev, { cmd, output: "", error: "Terminal requires the Tauri desktop runtime." }]);
+      return;
+    }
     cmdHistory.current = [cmd, ...cmdHistory.current.slice(0, 99)];
     histIdx.current = -1;
     setRunning(true);
@@ -93,6 +104,11 @@ export default function Terminal() {
   return (
     <div className="terminal-panel" onClick={() => inputRef.current?.focus()}>
       <div className="term-title">Terminal</div>
+      {!isTauriRuntime() && (
+        <div className="term-notice">
+          This panel runs local shell commands through Tauri. Use the desktop app window, not the web preview.
+        </div>
+      )}
       <div className="term-output" ref={outputRef}>
         {history.map((h, i) => (
           <div key={i} className="term-block">
@@ -121,7 +137,7 @@ export default function Terminal() {
           autoComplete="off"
           spellCheck={false}
           disabled={running}
-          placeholder={running ? "running…" : ""}
+          placeholder={running ? "running…" : isTauriRuntime() ? "Type a command…" : "Desktop runtime required"}
         />
       </div>
     </div>

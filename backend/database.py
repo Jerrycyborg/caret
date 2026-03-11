@@ -14,6 +14,13 @@ async def init_db():
                 id TEXT PRIMARY KEY,
                 title TEXT NOT NULL,
                 model TEXT NOT NULL DEFAULT 'ollama/llama3.2',
+                channel_type TEXT NOT NULL DEFAULT 'desktop',
+                channel_user_id TEXT,
+                channel_thread_id TEXT,
+                session_status TEXT NOT NULL DEFAULT 'active',
+                last_task_id TEXT,
+                last_executor TEXT,
+                last_agent_state TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
@@ -43,6 +50,19 @@ async def init_db():
                 prompt TEXT NOT NULL,
                 title TEXT NOT NULL,
                 summary TEXT NOT NULL DEFAULT '',
+                task_class TEXT NOT NULL DEFAULT 'general_local_assistance',
+                execution_domain TEXT NOT NULL DEFAULT 'local_device',
+                reporting_target TEXT NOT NULL DEFAULT 'oxy',
+                approval_scope TEXT NOT NULL DEFAULT 'none',
+                assigned_executor TEXT NOT NULL DEFAULT 'local_device_executor',
+                result_channel TEXT NOT NULL DEFAULT 'session',
+                task_kind TEXT NOT NULL DEFAULT 'workflow_task',
+                support_category TEXT,
+                support_severity TEXT NOT NULL DEFAULT 'healthy',
+                trigger_source TEXT NOT NULL DEFAULT 'manual',
+                auto_fix_eligible INTEGER NOT NULL DEFAULT 0,
+                auto_fix_attempted INTEGER NOT NULL DEFAULT 0,
+                auto_fix_result TEXT NOT NULL DEFAULT '',
                 risk_level TEXT NOT NULL DEFAULT 'read',
                 next_suggested_action TEXT NOT NULL DEFAULT '',
                 status TEXT NOT NULL DEFAULT 'draft',
@@ -81,6 +101,7 @@ async def init_db():
                 target TEXT NOT NULL DEFAULT '',
                 tool_name TEXT NOT NULL DEFAULT '',
                 risk_level TEXT NOT NULL DEFAULT 'read',
+                approval_scope TEXT NOT NULL DEFAULT 'task',
                 reason TEXT NOT NULL DEFAULT '',
                 rollback_note TEXT NOT NULL DEFAULT '',
                 status TEXT NOT NULL DEFAULT 'pending',
@@ -134,8 +155,29 @@ async def init_db():
         await _ensure_column(db, "approvals", "target", "TEXT NOT NULL DEFAULT ''")
         await _ensure_column(db, "approvals", "tool_name", "TEXT NOT NULL DEFAULT ''")
         await _ensure_column(db, "approvals", "risk_level", "TEXT NOT NULL DEFAULT 'read'")
+        await _ensure_column(db, "approvals", "approval_scope", "TEXT NOT NULL DEFAULT 'task'")
         await _ensure_column(db, "approvals", "reason", "TEXT NOT NULL DEFAULT ''")
         await _ensure_column(db, "approvals", "rollback_note", "TEXT NOT NULL DEFAULT ''")
+        await _ensure_column(db, "conversations", "channel_type", "TEXT NOT NULL DEFAULT 'desktop'")
+        await _ensure_column(db, "conversations", "channel_user_id", "TEXT")
+        await _ensure_column(db, "conversations", "channel_thread_id", "TEXT")
+        await _ensure_column(db, "conversations", "session_status", "TEXT NOT NULL DEFAULT 'active'")
+        await _ensure_column(db, "conversations", "last_task_id", "TEXT")
+        await _ensure_column(db, "conversations", "last_executor", "TEXT")
+        await _ensure_column(db, "conversations", "last_agent_state", "TEXT NOT NULL DEFAULT ''")
+        await _ensure_column(db, "tasks", "task_class", "TEXT NOT NULL DEFAULT 'general_local_assistance'")
+        await _ensure_column(db, "tasks", "execution_domain", "TEXT NOT NULL DEFAULT 'local_device'")
+        await _ensure_column(db, "tasks", "reporting_target", "TEXT NOT NULL DEFAULT 'oxy'")
+        await _ensure_column(db, "tasks", "approval_scope", "TEXT NOT NULL DEFAULT 'none'")
+        await _ensure_column(db, "tasks", "assigned_executor", "TEXT NOT NULL DEFAULT 'local_device_executor'")
+        await _ensure_column(db, "tasks", "result_channel", "TEXT NOT NULL DEFAULT 'session'")
+        await _ensure_column(db, "tasks", "task_kind", "TEXT NOT NULL DEFAULT 'workflow_task'")
+        await _ensure_column(db, "tasks", "support_category", "TEXT")
+        await _ensure_column(db, "tasks", "support_severity", "TEXT NOT NULL DEFAULT 'healthy'")
+        await _ensure_column(db, "tasks", "trigger_source", "TEXT NOT NULL DEFAULT 'manual'")
+        await _ensure_column(db, "tasks", "auto_fix_eligible", "INTEGER NOT NULL DEFAULT 0")
+        await _ensure_column(db, "tasks", "auto_fix_attempted", "INTEGER NOT NULL DEFAULT 0")
+        await _ensure_column(db, "tasks", "auto_fix_result", "TEXT NOT NULL DEFAULT ''")
         await db.commit()
 
 

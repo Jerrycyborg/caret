@@ -38,7 +38,8 @@ Owns:
 
 - chat
 - session switching
-- tasks
+- support
+- workflows
 - approvals
 - execution timeline
 - system panels
@@ -104,6 +105,22 @@ Local hub + external executor alignment:
   - OpenClaw
   - Wraith
 - desktop as the main reporting console
+
+### Milestone 4
+
+Dedicated local support lane:
+
+- `Support` and `Workflows` split in the UI
+- support incidents stay on the shared task engine with explicit support metadata
+- rule-based watcher lifecycle:
+  - `healthy`
+  - `monitoring`
+  - `action_required`
+  - `fix_queued`
+  - `fixed`
+  - `blocked`
+  - `escalated`
+- safe local auto-fix allowlist only
 
 ### Deferred
 

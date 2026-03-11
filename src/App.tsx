@@ -3,14 +3,13 @@ import Sidebar from "./components/Sidebar";
 import Chat from "./components/Chat";
 import Settings from "./components/Settings";
 import Resources from "./components/Resources";
-import Terminal from "./components/Terminal";
-import Files from "./components/Files";
+import Support from "./components/Support";
 import SecurityPanel from "./components/SecurityPanel";
 import PluginMarketplace from "./components/PluginMarketplace";
 import TasksPanel from "./components/TasksPanel";
 import "./App.css";
 
-export type View = "chat" | "tasks" | "files" | "terminal" | "resources" | "security" | "settings" | "marketplace";
+export type View = "chat" | "tasks" | "support" | "resources" | "security" | "settings" | "marketplace";
 
 function App() {
   const [view, setView] = useState<View>("chat");
@@ -27,9 +26,9 @@ function App() {
     setSidebarKey((k) => k + 1);
   }, []);
 
-  const handleOpenTask = useCallback((taskId: string) => {
+  const handleOpenTask = useCallback((taskId: string, taskKind: string = "workflow_task") => {
     setActiveTaskId(taskId);
-    setView("tasks");
+    setView(taskKind === "support_incident" ? "support" : "tasks");
   }, []);
 
   return (
@@ -52,10 +51,9 @@ function App() {
           />
         )}
         {view === "tasks" && <TasksPanel initialTaskId={activeTaskId} />}
+        {view === "support" && <Support onOpenWorkflows={() => setView("tasks")} />}
         {view === "settings" && <Settings />}
         {view === "resources" && <Resources />}
-        {view === "terminal" && <Terminal />}
-        {view === "files" && <Files />}
         {view === "security" && <SecurityPanel />}
         {view === "marketplace" && <PluginMarketplace />}
       </main>

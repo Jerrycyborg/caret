@@ -7,6 +7,12 @@ type TaskSummary = {
   title: string;
   summary: string;
   prompt: string;
+  task_class: string;
+  execution_domain: string;
+  reporting_target: string;
+  approval_scope: string;
+  assigned_executor: string;
+  result_channel: string;
   risk_level: string;
   next_suggested_action: string;
   status: string;
@@ -34,6 +40,7 @@ type Approval = {
   target: string;
   tool_name: string;
   risk_level: string;
+  approval_scope: string;
   reason: string;
   rollback_note: string;
   status: string;
@@ -59,12 +66,26 @@ type ToolDefinition = {
   rollback_hint: string;
 };
 
+type ExecutorDefinition = {
+  id: string;
+  role: string;
+  capabilities: string[];
+  health: string;
+  supported_task_types: string[];
+  execution_mode: string;
+};
+
 type TaskDetail = {
   task: TaskSummary;
   steps: TaskStep[];
   approvals: Approval[];
   timeline: TimelineEvent[];
   next_suggested_action: string;
+  agent_state?: {
+    active_role: string;
+    summary: string;
+    agents: { role: string; state: string }[];
+  };
 };
 
 interface TasksPanelProps {
@@ -76,20 +97,24 @@ export default function TasksPanel({ initialTaskId = null }: TasksPanelProps) {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(initialTaskId);
   const [taskDetail, setTaskDetail] = useState<TaskDetail | null>(null);
   const [tools, setTools] = useState<ToolDefinition[]>([]);
+  const [executors, setExecutors] = useState<ExecutorDefinition[]>([]);
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const refreshTasks = async () => {
-    const [taskRes, toolRes] = await Promise.all([
-      fetch(`${BACKEND_URL}/v1/tasks`),
+    const [taskRes, toolRes, executorRes] = await Promise.all([
+      fetch(`${BACKEND_URL}/v1/tasks?task_kind=workflow_task`),
       fetch(`${BACKEND_URL}/v1/tools`),
+      fetch(`${BACKEND_URL}/v1/executors`),
     ]);
     const taskData = await taskRes.json();
     const toolData = await toolRes.json();
+    const executorData = await executorRes.json();
     const nextTasks = taskData.tasks ?? [];
     setTasks(nextTasks);
     setTools(toolData.tools ?? []);
+    setExecutors(executorData.executors ?? []);
     if (!selectedTaskId && nextTasks.length > 0) {
       setSelectedTaskId(nextTasks[0].id);
     }
@@ -128,11 +153,11 @@ export default function TasksPanel({ initialTaskId = null }: TasksPanelProps) {
   }, [selectedTaskId]);
 
   const activeTasks = useMemo(
-    () => tasks.filter((task) => !["done", "failed"].includes(task.status)),
+    () => tasks.filter((task) => !["completed", "failed", "rejected"].includes(task.status)),
     [tasks]
   );
   const completedTasks = useMemo(
-    () => tasks.filter((task) => ["done", "failed"].includes(task.status)),
+    () => tasks.filter((task) => ["completed", "failed", "rejected"].includes(task.status)),
     [tasks]
   );
   const pendingApprovals = useMemo(
@@ -220,7 +245,7 @@ export default function TasksPanel({ initialTaskId = null }: TasksPanelProps) {
               <div className="task-list-title">{task.title}</div>
               <span className={`task-risk risk-${task.risk_level}`}>{task.risk_level}</span>
             </div>
-            <div className="task-list-meta">{task.status}</div>
+            <div className="task-list-meta">{task.status} / {task.assigned_executor}</div>
           </button>
         ))
       ) : (
@@ -233,8 +258,8 @@ export default function TasksPanel({ initialTaskId = null }: TasksPanelProps) {
     <div className="tasks-panel">
       <div className="tasks-header">
         <div>
-          <h2>Tasks</h2>
-          <div className="tasks-subtitle">Supervised execution with one approval flow.</div>
+          <h2>Workflows</h2>
+          <div className="tasks-subtitle">Repo, executor, and delegated work outside the local support lane.</div>
         </div>
       </div>
 
@@ -242,11 +267,11 @@ export default function TasksPanel({ initialTaskId = null }: TasksPanelProps) {
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder="Describe a repo task. Oxy will plan reads first and hold writes for approval."
+          placeholder="Describe a workflow. Oxy will plan reads first and hold writes or boundaries for approval."
           rows={3}
         />
         <button onClick={createTask} disabled={loading || !prompt.trim()}>
-          {loading ? "Working…" : "Create Task"}
+          {loading ? "Working…" : "Create Workflow"}
         </button>
       </div>
 
@@ -263,7 +288,7 @@ export default function TasksPanel({ initialTaskId = null }: TasksPanelProps) {
         <section className="task-detail">
           {taskDetail ? (
             <>
-              <div className="tasks-section-title">Task</div>
+              <div className="tasks-section-title">Workflow</div>
               <div className="task-card">
                 <div className="task-status-row">
                   <span className="task-pill">{taskDetail.task.status}</span>
@@ -271,6 +296,17 @@ export default function TasksPanel({ initialTaskId = null }: TasksPanelProps) {
                 </div>
                 <div className="task-prompt">{taskDetail.task.prompt}</div>
                 <div className="task-summary">{taskDetail.task.summary}</div>
+                <div className="task-next">
+                  {taskDetail.task.task_class} / {taskDetail.task.execution_domain} / {taskDetail.task.assigned_executor}
+                </div>
+                <div className="task-next">
+                  Reporting: {taskDetail.task.reporting_target} / Approval: {taskDetail.task.approval_scope}
+                </div>
+                {taskDetail.agent_state && (
+                  <div className="task-next">
+                    Agents: {taskDetail.agent_state.active_role} / {taskDetail.agent_state.summary}
+                  </div>
+                )}
                 <div className="task-next">Next: {taskDetail.next_suggested_action}</div>
               </div>
 
@@ -307,6 +343,7 @@ export default function TasksPanel({ initialTaskId = null }: TasksPanelProps) {
                         <div className="approval-meta">
                           {approval.tool_name} {"->"} {approval.target}
                         </div>
+                        <div className="approval-meta">Scope: {approval.approval_scope}</div>
                         <div className="approval-meta">{approval.reason}</div>
                         {approval.rollback_note && <div className="approval-meta">Rollback: {approval.rollback_note}</div>}
                       </div>
@@ -358,7 +395,7 @@ export default function TasksPanel({ initialTaskId = null }: TasksPanelProps) {
               </div>
             </>
           ) : (
-            <div className="tasks-empty">Select a task to inspect steps, approvals, and timeline.</div>
+            <div className="tasks-empty">Select a workflow to inspect steps, approvals, and timeline.</div>
           )}
         </section>
 
@@ -372,6 +409,19 @@ export default function TasksPanel({ initialTaskId = null }: TasksPanelProps) {
                 <div className="tool-meta">
                   Risk: {tool.risk_level} | Approval: {tool.approval_required ? "yes" : "no"} | Executor: {tool.executor_type}
                 </div>
+              </div>
+            ))}
+          </div>
+          <div className="tasks-section-title tasks-section-gap">Executors</div>
+          <div className="task-card">
+            {executors.map((executor) => (
+              <div key={executor.id} className="tool-row">
+                <div className="tool-name">{executor.id}</div>
+                <div className="tool-meta">{executor.role}</div>
+                <div className="tool-meta">
+                  Mode: {executor.execution_mode} | Health: {executor.health}
+                </div>
+                <div className="tool-meta">Tasks: {executor.supported_task_types.join(", ")}</div>
               </div>
             ))}
           </div>

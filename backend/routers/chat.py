@@ -52,7 +52,9 @@ async def chat(request: ChatRequest):
                         collected.append(delta)
                         yield f"data: {json.dumps({'content': delta})}\n\n"
             except Exception as e:
-                yield f"data: {json.dumps({'content': f'Error: {str(e)}'})}\n\n"
+                fallback = _fallback_chat_content(request.model, latest_user_message, task_handoff, e)
+                collected.append(fallback)
+                yield f"data: {json.dumps({'content': fallback})}\n\n"
             finally:
                 if request.conversation_id and collected:
                     await _save_message(request.conversation_id, "assistant", "".join(collected))
@@ -63,8 +65,11 @@ async def chat(request: ChatRequest):
 
         return StreamingResponse(stream_response(), media_type="text/event-stream")
 
-    response = await litellm.acompletion(model=request.model, messages=messages)
-    content = response.choices[0].message.content
+    try:
+        response = await litellm.acompletion(model=request.model, messages=messages)
+        content = response.choices[0].message.content
+    except Exception as e:
+        content = _fallback_chat_content(request.model, latest_user_message, task_handoff, e)
     if request.conversation_id:
         await _save_message(request.conversation_id, "assistant", content)
         await _bump_conversation(request.conversation_id, request.model)
@@ -87,3 +92,19 @@ async def _bump_conversation(conv_id: str, model: str):
             (model, conv_id),
         )
         await db.commit()
+
+
+def _fallback_chat_content(model: str, latest_user_message: str, task_handoff: Optional[dict], error: Exception) -> str:
+    if task_handoff:
+        return (
+            f"Oxy could not reach the selected model `{model}` right now.\n\n"
+            f"I still created a supervised task: {task_handoff['title']}.\n"
+            f"Executor: {task_handoff['assigned_executor']} / {task_handoff['execution_domain']}.\n"
+            f"Next: {task_handoff['next_suggested_action']}"
+        )
+    summary = latest_user_message[:120] if latest_user_message else "your request"
+    return (
+        f"Oxy could not reach the selected model `{model}` right now.\n\n"
+        f"I received {summary!r}, but there is no live LLM response available in this environment. "
+        f"Check provider credentials or local Ollama availability."
+    )

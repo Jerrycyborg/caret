@@ -70,6 +70,19 @@ V1 ships as an internal-only operator shell for power users on macOS and Ubuntu.
   - allowlisted `build.run`
 - privileged OS actions with explicit approval and Rust-only routing
 - task list, approval panel, and execution timeline
+- split product lanes:
+  - `Support` for local incidents, fix queue, escalations, and history
+  - `Workflows` for repo/dev, OpenClaw, and Wraith execution
+- local support daemon that can watch device-health thresholds and auto-create supervised support incidents
+- support incident metadata on the shared task engine:
+  - `task_kind`
+  - `support_category`
+  - `support_severity`
+  - `trigger_source`
+  - `auto_fix_eligible`
+  - `auto_fix_attempted`
+  - `auto_fix_result`
+- safe auto-fix allowlist for non-privileged local remediation only
 
 ### Non-Goals for V1
 
@@ -88,6 +101,7 @@ Fast local feedback for active work.
 
 - `npm run verify:frontend`
 - `npm run verify:rust`
+- `python -m unittest discover backend/tests`
 - `npm run tauri dev`
 - `npm run backend`
 
@@ -136,6 +150,7 @@ Centralized build-maintenance files:
 - [ ] `npm install`
 - [ ] `npm run verify:frontend`
 - [ ] `npm run verify:rust`
+- [ ] `python -m unittest discover backend/tests`
 
 ### Gate B: App Viability
 
@@ -145,8 +160,11 @@ Centralized build-maintenance files:
 - [ ] Session list can show channel source and session state
 - [ ] Action-oriented chat can emit a task handoff
 - [ ] Task handoff can include immediate read-only execution summary
+- [ ] Support incidents stay visible in the Support lane instead of the Workflow lane
+- [ ] Task updates can be written back into conversation/session history as compact reports
 - [ ] Channel messages can resolve/create sessions and return compact replies
 - [ ] Tasks show execution domain, assigned executor, and approval scope
+- [ ] Support shows monitoring, fix queue, escalations, and history clearly
 - [ ] Read-only task steps auto-run and record timeline events
 - [ ] Write steps stop for approval and do not execute early
 - [ ] Tool adapters are visible through a common registry/contract
@@ -176,8 +194,10 @@ Centralized build-maintenance files:
 
 - privileged OS actions still need full release-grade elevation hardening
 - backend approval policy is stronger, but not yet unified across every UI mutation path
+- support auto-fix is intentionally narrow and only covers safe deterministic actions today
 - OpenClaw and Wraith are adapter contracts only; live subsystem integration is still open
-- Telegram and WhatsApp are session/channel contracts only; provider wiring is still open
+- Telegram now has a webhook-ready adapter path; provider deployment and secrets management are still open
+- WhatsApp is still a session/channel contract only; provider wiring is still open
 - browser/API adapters are deferred
 - hardware/model routing is deferred
 - packaging/signing ownership is still not encoded in the repo

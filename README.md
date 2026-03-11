@@ -57,7 +57,7 @@ Oxy currently follows one control model:
 
 | Layer | Responsibility |
 |---|---|
-| Frontend | Sessions, chat, tasks, approvals, timeline, operator console surfaces |
+| Frontend | Sessions, chat, support, workflows, approvals, timeline, operator console surfaces |
 | Backend | Orchestration, task routing, approval policy, executor selection, reporting |
 | Rust / Tauri | Privileged local OS actions, system inspection, machine control |
 
@@ -76,7 +76,26 @@ Core rule:
 - task and execution state attached to sessions
 - session source and state visible in the UI
 
-### Task System
+### Support Lane
+
+- local-first support incidents for:
+  - disk pressure
+  - performance pressure
+  - meeting app pressure
+  - camera/audio readiness
+  - printer/network readiness
+  - startup/background load
+- deterministic watcher lifecycle:
+  - `monitoring`
+  - `action_required`
+  - `fix_queued`
+  - `fixed`
+  - `blocked`
+  - `escalated`
+- safe auto-fix queue for non-privileged remediation only
+- support history, escalations, and queued fixes in a dedicated Support view
+
+### Workflow Lane
 
 - task classes:
   - `device_support`
@@ -120,6 +139,7 @@ Core rule:
 The repo is moving toward a local-first operator hub where:
 
 - Oxy is the main UI and reporting surface
+- local device support is a first-class product lane, not a side panel
 - OpenClaw handles build and software execution work
 - Wraith handles specialist security workflows
 - device-level assistance remains a first-class local capability
@@ -176,7 +196,9 @@ The repo should be resumed in this order:
 
 In scope now:
 
+- dedicated `Support` and `Workflows` product lanes
 - orchestrator hardening
+- local support watcher, incident queue, and safe auto-fix metadata
 - executor integration contracts
 - approval and reporting cohesion
 - session-centric operator UX
