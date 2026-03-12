@@ -3,6 +3,9 @@ name: Oxy CI
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   push:
     branches: [ main ]
@@ -51,6 +54,30 @@ jobs:
         run: ./build/ci/verify-rust.sh
       - name: Verify security baseline
         run: ./build/ci/verify-security.sh
+  verify-windows:
+    name: Verify Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install dependencies
+        run: npm install
+      - name: Verify frontend
+        run: ./build/ci/verify-frontend.sh
+      - name: Verify Rust
+        run: ./build/ci/verify-rust.sh
+      - name: Verify security baseline
+        run: ./build/ci/verify-security.sh
   package-ubuntu:
     name: Package Ubuntu
     runs-on: ubuntu-latest
@@ -85,7 +112,7 @@ jobs:
   package-windows:
     name: Package Windows
     runs-on: windows-latest
-    needs: verify
+    needs: verify-windows
     steps:
       - uses: actions/checkout@v4
       - name: Set up Node.js
