@@ -216,6 +216,7 @@ python3 -m unittest discover backend/tests
 - privileged local actions remain in Rust
 - provider secrets and Jira token are runtime/env-only, not persisted in SQLite
 - the unused Tauri shell capability has been removed from the desktop runtime
+- the vulnerable `glib 0.18` dependency path is patched locally through a vendored gtk-rs-core subset until the upstream Tauri/Linux stack moves to a fixed line
 - the security baseline verifies:
   - no shell capability regression
   - no `sh -c` regression

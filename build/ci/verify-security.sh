@@ -24,4 +24,9 @@ if rg -n "INSERT INTO api_keys|SELECT provider, key_value FROM api_keys" backend
   exit 1
 fi
 
+if ! rg -n "&mut p" vendor/gtk-rs-core/glib/src/variant_iter.rs >/dev/null 2>&1; then
+  echo "Security check failed: vendored glib patch for VariantStrIter is missing."
+  exit 1
+fi
+
 echo "Security verification passed."

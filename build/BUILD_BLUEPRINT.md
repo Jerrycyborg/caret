@@ -245,6 +245,7 @@ Centralized build-maintenance files:
 - support auto-fix is intentionally narrow and only covers safe deterministic actions today
 - support is now org-ready through deployment config, but richer org policy controls are still open
 - secrets now stay in runtime/env instead of SQLite, but OS-native secure storage is still not implemented
+- the prior `glib 0.18` advisory is currently mitigated through a local vendored patch in the Linux/Tauri dependency path
 - Windows backend support monitoring now has a real code path and CI verification lane, but Windows packaging and broader runtime validation are still open
 - Windows packaging now uses a bundled backend sidecar EXE and release artifacts, but signing and real-device validation are still open
 - OpenClaw and Wraith are adapter contracts only; live subsystem integration is still open

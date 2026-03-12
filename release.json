@@ -1,7 +1,7 @@
 {
   "name": "oxy",
-  "version": "0.6.0",
-  "milestone": "Windows Direct-Install Packaging Path",
+  "version": "0.6.1",
+  "milestone": "Windows Packaging + GLib Security Patch",
   "release_date": "2026-03-12",
   "status": "active-development",
   "source_of_truth": [

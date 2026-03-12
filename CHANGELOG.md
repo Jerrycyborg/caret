@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.1 - 2026-03-12
+
+- patched the vulnerable `glib 0.18` transitive dependency path locally via a vendored gtk-rs-core subset
+- pinned Tauri’s Linux/GTK dependency chain to the patched local `glib` crates until upstream migration removes the need
+
 ## 0.6.0 - 2026-03-12
 
 - added Windows backend sidecar packaging via a PyInstaller-built backend EXE

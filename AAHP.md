@@ -94,6 +94,7 @@ Ownership:
 - Jira is now the first live ticket adapter behind Oxy’s support lane
 - provider secrets and Jira token are now runtime/env-only instead of being persisted in SQLite
 - the unused Tauri shell capability has been removed from the desktop runtime surface
+- the vulnerable `glib 0.18` transitive path is now patched locally via a vendored gtk-rs-core subset in `vendor/gtk-rs-core`
 - a lightweight security verification lane now checks for shell-capability, shell-interpolation, and secret-persistence regressions
 - agent roles are supervised metadata only:
   - planner
