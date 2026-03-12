@@ -190,7 +190,7 @@ export default function Chat({
             ? {
                 ...m,
                 content:
-                  "Could not reach the Oxy backend. Make sure it is running on port 8000.\n\nRun: `npm run backend`",
+                  "Could not reach the Caret backend. Make sure the local assistant service is running on port 8000.\n\nRun: `npm run backend`",
               }
             : m
         )
@@ -230,7 +230,7 @@ export default function Chat({
         )}
         {messages.map((msg) => (
           <div key={msg.id} className={`message message-${msg.role}`}>
-            <div className="message-role">{msg.role === "user" ? "You" : "Oxy"}</div>
+            <div className="message-role">{msg.role === "user" ? "You" : "Caret"}</div>
             <div className="message-content">
               {msg.content || <span className="typing">▋</span>}
             </div>
@@ -243,7 +243,7 @@ export default function Chat({
               <span className={`task-risk risk-${taskHandoff.risk_level}`}>{taskHandoff.risk_level}</span>
             </div>
             <div className="chat-task-body">
-              {taskHandoff.task_class} / {taskHandoff.execution_domain} / {taskHandoff.assigned_executor}
+              {taskHandoff.task_class} / {taskHandoff.execution_domain}
             </div>
             <div className="chat-task-body">{taskHandoff.summary}</div>
             {taskHandoff.task_report?.headline && (
@@ -262,7 +262,7 @@ export default function Chat({
             )}
             <div className="chat-task-body">{taskHandoff.next_suggested_action}</div>
             <button className="chat-task-button" onClick={() => onOpenTask(taskHandoff.task_id, taskHandoff.task_kind)}>
-              {taskHandoff.task_kind === "support_incident" ? "Open Support" : "Open Workflow"}
+              Open Support
             </button>
           </div>
         )}
@@ -280,7 +280,7 @@ export default function Chat({
               sendMessage();
             }
           }}
-          placeholder="Ask Oxy anything\u2026 (Enter to send, Shift+Enter for newline)"
+          placeholder="Ask Caret for help with your device\u2026 (Enter to send, Shift+Enter for newline)"
           rows={2}
           disabled={isStreaming}
         />

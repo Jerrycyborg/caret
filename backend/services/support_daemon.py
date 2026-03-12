@@ -28,8 +28,8 @@ from services.support_platform import (
     support_platform_id,
 )
 
-CHECK_INTERVAL_SECONDS = int(os.environ.get("OXY_SUPPORT_DAEMON_INTERVAL", "300"))
-TRIGGER_COOLDOWN_MINUTES = int(os.environ.get("OXY_SUPPORT_DAEMON_COOLDOWN_MINUTES", "360"))
+CHECK_INTERVAL_SECONDS = int(os.environ.get("CARET_SUPPORT_DAEMON_INTERVAL", "300"))
+TRIGGER_COOLDOWN_MINUTES = int(os.environ.get("CARET_SUPPORT_DAEMON_COOLDOWN_MINUTES", "360"))
 
 _daemon_state: dict[str, Any] = {
     "running": False,
@@ -619,7 +619,7 @@ async def escalate_support_incident(task_id: str) -> bool:
             (
                 "Manual escalation requested because the issue needs review or may cross a privileged boundary.",
                 datetime.now(timezone.utc).isoformat(),
-                "Escalated. Review the incident in Support and use Security or Workflows for supervised follow-up.",
+                "Escalated. Review the incident in Support and use Security for supervised follow-up.",
                 task_id,
             ),
         )
@@ -777,13 +777,13 @@ def _post_fix_recheck(category: str, result: dict[str, str]) -> dict[str, str]:
     updated = dict(result)
     if category == "disk" and snapshot.disk_used_pct >= 80:
         updated["support_severity"] = "monitoring"
-        updated["auto_fix_result"] += " Disk pressure is still elevated, so Oxy moved the incident back to monitoring."
+        updated["auto_fix_result"] += " Disk pressure is still elevated, so Caret moved the incident back to monitoring."
         updated["next_suggested_action"] = "Review the cleanup candidates and consider creating an IT ticket if storage pressure remains high."
         updated["decision_reason"] = "The safe remediation prepared cleanup candidates, but disk pressure remains above the action threshold."
         return updated
     if category in {"performance", "meetings"} and max(snapshot.cpu_load_pct, snapshot.mem_used_pct, snapshot.teams_cpu_pct) >= 75:
         updated["support_severity"] = "monitoring"
-        updated["auto_fix_result"] += " Load is still elevated, so Oxy is keeping the issue under monitoring."
+        updated["auto_fix_result"] += " Load is still elevated, so Caret is keeping the issue under monitoring."
         updated["next_suggested_action"] = "Review diagnostics and escalate if the issue continues."
         updated["decision_reason"] = "Diagnostics completed, but the machine is still under visible load."
         return updated

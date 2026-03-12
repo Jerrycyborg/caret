@@ -6,9 +6,9 @@ import uvicorn
 
 def _configure_runtime() -> None:
     home = Path.home()
-    oxy_root = home / ".oxy"
-    oxy_root.mkdir(parents=True, exist_ok=True)
-    os.environ.setdefault("OXY_DB_PATH", str(oxy_root / "oxy.db"))
+    caret_root = home / ".caret"
+    caret_root.mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault("CARET_DB_PATH", str(caret_root / "caret.db"))
 
 
 def main() -> None:

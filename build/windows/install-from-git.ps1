@@ -1,5 +1,5 @@
 param(
-  [string]$InstallRoot = "$env:LOCALAPPDATA\Oxy",
+  [string]$InstallRoot = "$env:LOCALAPPDATA\Caret",
   [switch]$SkipPrerequisites
 )
 
@@ -86,7 +86,7 @@ function Get-RepoRoot {
   return $candidate.Path
 }
 
-function Install-Oxy {
+function Install-Caret {
   param([string]$RepoRoot)
 
   New-Item -ItemType Directory -Path $InstallRoot -Force | Out-Null
@@ -111,14 +111,14 @@ function Install-Oxy {
     Write-Step "Installing $($msi.Name)"
     Start-Process msiexec.exe -ArgumentList @("/i", $msi.FullName, "/passive") -Wait
 
-    $installedExe = Get-ChildItem -Path "$env:LOCALAPPDATA\Programs" -Filter "Oxy.exe" -Recurse -ErrorAction SilentlyContinue |
+    $installedExe = Get-ChildItem -Path "$env:LOCALAPPDATA\Programs" -Filter "Caret.exe" -Recurse -ErrorAction SilentlyContinue |
       Select-Object -First 1
 
     if ($null -ne $installedExe) {
-      Write-Step "Launching Oxy"
+      Write-Step "Launching Caret"
       Start-Process $installedExe.FullName
     } else {
-      Write-Step "Oxy installed. Launch it from the Start menu if it does not open automatically."
+      Write-Step "Caret installed. Launch it from the Start menu if it does not open automatically."
     }
   } finally {
     Pop-Location
@@ -127,4 +127,4 @@ function Install-Oxy {
 
 $repoRoot = Get-RepoRoot
 Ensure-Prerequisites
-Install-Oxy -RepoRoot $repoRoot
+Install-Caret -RepoRoot $repoRoot

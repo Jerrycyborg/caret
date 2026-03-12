@@ -88,7 +88,7 @@ type SupportStatus = {
   history: SupportIncident[];
 };
 
-export default function Support({ onOpenWorkflows }: { onOpenWorkflows: () => void }) {
+export default function Support() {
   const [status, setStatus] = useState<SupportStatus | null>(null);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
   const [selectedIncident, setSelectedIncident] = useState<SupportIncidentDetail | null>(null);
@@ -217,7 +217,6 @@ export default function Support({ onOpenWorkflows }: { onOpenWorkflows: () => vo
           <h2>Support</h2>
           <p className="support-subtitle">Local-first incident monitoring, safe remediation, and escalation for device health.</p>
         </div>
-        <button className="support-open-tasks" onClick={onOpenWorkflows}>Open workflows</button>
       </div>
 
       {error && <div className="support-error">{error}</div>}
@@ -313,7 +312,7 @@ export default function Support({ onOpenWorkflows }: { onOpenWorkflows: () => vo
                   </span>
                 </div>
                 <div className="support-line">{selectedIncident.task.summary}</div>
-                <div className="support-note">{selectedIncident.task.support_category} · {selectedIncident.task.assigned_executor}</div>
+                <div className="support-note">{selectedIncident.task.support_category || "device"}</div>
                 <div className="support-line"><strong>Why:</strong> {selectedIncident.incident.decision_reason}</div>
                 <div className="support-line"><strong>Signal:</strong> {selectedIncident.incident.source_signal || "manual"}</div>
                 <div className="support-line"><strong>Detected:</strong> {new Date(selectedIncident.incident.detected_at).toLocaleString()}</div>
@@ -361,9 +360,6 @@ export default function Support({ onOpenWorkflows }: { onOpenWorkflows: () => vo
                       {busyId === selectedIncident.task.id ? "Creating…" : "Create IT ticket"}
                     </button>
                   )}
-                  <button className="support-action-button secondary" onClick={onOpenWorkflows}>
-                    Open workflows
-                  </button>
                 </div>
               </div>
 

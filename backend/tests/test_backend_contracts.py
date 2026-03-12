@@ -44,7 +44,7 @@ class BackendContractTests(unittest.IsolatedAsyncioTestCase):
         self.tempdir = tempfile.TemporaryDirectory()
         database.DB_PATH = Path(self.tempdir.name) / "oxy-test.db"
         os.environ.pop("OPENAI_API_KEY", None)
-        os.environ.pop("OXY_JIRA_API_TOKEN", None)
+        os.environ.pop("CARET_JIRA_API_TOKEN", None)
         await init_db()
 
     async def asyncTearDown(self):

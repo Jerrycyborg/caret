@@ -1,12 +1,13 @@
 {
-  "name": "oxy",
-  "version": "0.6.1",
-  "milestone": "Windows Packaging + GLib Security Patch",
+  "name": "caret",
+  "version": "0.1.0",
+  "milestone": "Caret Fork Baseline",
   "release_date": "2026-03-12",
-  "status": "active-development",
+  "status": "product-refocus",
   "source_of_truth": [
     "build/Core_blueprint.md",
     "build/BUILD_BLUEPRINT.md",
     "AAHP.md"
-  ]
+  ],
+  "forked_from": "Oxy personal-oxy-baseline-v0.6.2"
 }

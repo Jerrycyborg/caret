@@ -5,27 +5,11 @@ interface CpuInfo { usage: number; core_count: number; brand: string }
 interface MemInfo { used_gb: number; total_gb: number; used_pct: number }
 interface DiskInfo { name: string; mount: string; used_gb: number; total_gb: number; used_pct: number }
 interface ProcessInfo { pid: number; name: string; cpu_pct: number; mem_mb: number }
-interface ExecutionTargetInfo { id: string; label: string; available: boolean; reason: string }
-interface ToolAdapterInfo {
-  id: string;
-  name: string;
-  adapter_type: string;
-  health: string;
-  capabilities: string[];
-  orchestration_role: string;
-}
-interface ToolAdapterExecutionResult {
-  status: string;
-  adapter_id: string;
-  output?: string | null;
-  error?: string | null;
-}
 interface SystemInfo {
   cpu: CpuInfo;
   mem: MemInfo;
   disks: DiskInfo[];
   top_processes: ProcessInfo[];
-  execution_targets: ExecutionTargetInfo[];
 }
 
 function GaugeBar({ pct, color }: { pct: number; color: string }) {
@@ -44,19 +28,13 @@ function healthTone(pct: number, warn = 60, danger = 80) {
 
 export default function Resources() {
   const [info, setInfo] = useState<SystemInfo | null>(null);
-  const [adapters, setAdapters] = useState<ToolAdapterInfo[]>([]);
-  const [adapterResult, setAdapterResult] = useState<ToolAdapterExecutionResult | null>(null);
   const [error, setError] = useState("");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refresh = async () => {
     try {
-      const [systemInfo, toolAdapters] = await Promise.all([
-        invoke<SystemInfo>("get_system_info"),
-        invoke<ToolAdapterInfo[]>("list_tool_adapters"),
-      ]);
+      const systemInfo = await invoke<SystemInfo>("get_system_info");
       setInfo(systemInfo);
-      setAdapters(toolAdapters);
       setError("");
     } catch (e) {
       setError(String(e));
@@ -65,38 +43,25 @@ export default function Resources() {
 
   useEffect(() => {
     refresh();
-    intervalRef.current = setInterval(refresh, 3000);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+    intervalRef.current = setInterval(refresh, 5000);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
   }, []);
-
-  const runReferenceAdapter = async () => {
-    try {
-      const result = await invoke<ToolAdapterExecutionResult>("execute_tool_adapter", {
-        request: { adapter_id: "reference_cli", input: "oxy-reference-check" },
-      });
-      setAdapterResult(result);
-    } catch (e) {
-      setError(String(e));
-    }
-  };
 
   if (error) return <div className="resources"><div className="res-error">⚠ {error}</div></div>;
   if (!info) return <div className="resources"><div className="res-loading">Loading…</div></div>;
 
   const cpuColor = healthTone(info.cpu.usage, 50, 80);
   const memColor = healthTone(info.mem.used_pct, 60, 80);
-  const availableTargets = info.execution_targets.filter((target) => target.available);
-  const blockedTargets = info.execution_targets.filter((target) => !target.available);
-  const healthyAdapters = adapters.filter((adapter) => adapter.health === "healthy");
 
   return (
     <div className="resources">
       <div className="res-header">
         <div>
           <div className="res-title">System</div>
-          <div className="res-subtitle">Readable machine status, execution readiness, and operator support context.</div>
+          <div className="res-subtitle">Live machine status for support, cleanup, and device health decisions.</div>
         </div>
-        <button className="res-action" onClick={runReferenceAdapter}>Run adapter check</button>
       </div>
 
       <div className="res-overview-grid">
@@ -125,40 +90,17 @@ export default function Resources() {
         </div>
 
         <div className="res-card">
-          <div className="res-card-label">Execution readiness</div>
-          <div className="res-card-value">{availableTargets.length}/{info.execution_targets.length}</div>
-          <div className="res-card-sub">targets available</div>
-          <div className="res-chip-row">
-            {availableTargets.map((target) => (
-              <span key={target.id} className="res-chip ok">{target.label}</span>
-            ))}
-            {blockedTargets.map((target) => (
-              <span key={target.id} className="res-chip muted">{target.label}</span>
-            ))}
-          </div>
+          <div className="res-card-label">Hardware</div>
+          <div className="res-card-value">{info.cpu.core_count}</div>
+          <div className="res-card-sub">CPU cores · {info.cpu.brand}</div>
         </div>
 
         <div className="res-card">
-          <div className="res-card-label">Operator stack</div>
-          <div className="res-card-value">{healthyAdapters.length}</div>
-          <div className="res-card-sub">healthy adapters</div>
-          <div className="res-chip-row">
-            {adapters.slice(0, 4).map((adapter) => (
-              <span key={adapter.id} className={`res-chip ${adapter.health === "healthy" ? "ok" : "warn"}`}>
-                {adapter.name}
-              </span>
-            ))}
-          </div>
+          <div className="res-card-label">Memory</div>
+          <div className="res-card-value">{info.mem.used_gb.toFixed(1)} GB</div>
+          <div className="res-card-sub">used of {info.mem.total_gb.toFixed(1)} GB</div>
         </div>
       </div>
-
-      {adapterResult && (
-        <div className="res-banner">
-          <strong>Reference adapter:</strong> {adapterResult.status}
-          {adapterResult.output ? ` · ${adapterResult.output}` : ""}
-          {adapterResult.error ? ` · ${adapterResult.error}` : ""}
-        </div>
-      )}
 
       <div className="res-layout">
         <section className="res-panel">
@@ -177,43 +119,6 @@ export default function Resources() {
                 </div>
               );
             })}
-          </div>
-        </section>
-
-        <section className="res-panel">
-          <div className="res-section-title">Execution Targets</div>
-          <div className="res-scroll-list">
-            {info.execution_targets.map((target) => (
-              <div key={target.id} className="res-list-item">
-                <div className="res-list-top">
-                  <strong>{target.label}</strong>
-                  <span className={`res-state ${target.available ? "ok" : "muted"}`}>
-                    {target.available ? "available" : "unavailable"}
-                  </span>
-                </div>
-                <div className="res-card-sub">{target.reason}</div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="res-panel">
-          <div className="res-section-title">Tool Adapters</div>
-          <div className="res-scroll-list">
-            {adapters.map((adapter) => (
-              <div key={adapter.id} className="res-list-item">
-                <div className="res-list-top">
-                  <strong>{adapter.name}</strong>
-                  <span className={`res-state ${adapter.health === "healthy" ? "ok" : "warn"}`}>{adapter.health}</span>
-                </div>
-                <div className="res-card-sub">{adapter.orchestration_role} · {adapter.adapter_type}</div>
-                <div className="res-chip-row">
-                  {adapter.capabilities.slice(0, 3).map((capability) => (
-                    <span key={capability} className="res-chip muted">{capability}</span>
-                  ))}
-                </div>
-              </div>
-            ))}
           </div>
         </section>
 

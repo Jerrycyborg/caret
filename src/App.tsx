@@ -5,17 +5,14 @@ import Settings from "./components/Settings";
 import Resources from "./components/Resources";
 import Support from "./components/Support";
 import SecurityPanel from "./components/SecurityPanel";
-import PluginMarketplace from "./components/PluginMarketplace";
-import TasksPanel from "./components/TasksPanel";
 import "./App.css";
 
-export type View = "chat" | "tasks" | "support" | "resources" | "security" | "settings" | "marketplace";
+export type View = "chat" | "support" | "resources" | "security" | "settings";
 
 function App() {
   const [view, setView] = useState<View>("chat");
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [sidebarKey, setSidebarKey] = useState(0);
-  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
 
   const handleConvCreated = useCallback((id: string) => {
     setActiveConvId(id);
@@ -26,9 +23,8 @@ function App() {
     setSidebarKey((k) => k + 1);
   }, []);
 
-  const handleOpenTask = useCallback((taskId: string, taskKind: string = "workflow_task") => {
-    setActiveTaskId(taskId);
-    setView(taskKind === "support_incident" ? "support" : "tasks");
+  const handleOpenTask = useCallback(() => {
+    setView("support");
   }, []);
 
   return (
@@ -37,8 +33,14 @@ function App() {
         activeView={view}
         onNavigate={(v) => setView(v)}
         activeConvId={activeConvId}
-        onSelectConv={(id) => { setActiveConvId(id); setView("chat"); }}
-        onNewConv={() => { setActiveConvId(null); setView("chat"); }}
+        onSelectConv={(id) => {
+          setActiveConvId(id);
+          setView("chat");
+        }}
+        onNewConv={() => {
+          setActiveConvId(null);
+          setView("chat");
+        }}
         refreshKey={sidebarKey}
       />
       <main className="main-content">
@@ -50,12 +52,10 @@ function App() {
             onOpenTask={handleOpenTask}
           />
         )}
-        {view === "tasks" && <TasksPanel initialTaskId={activeTaskId} />}
-        {view === "support" && <Support onOpenWorkflows={() => setView("tasks")} />}
+        {view === "support" && <Support />}
         {view === "settings" && <Settings />}
         {view === "resources" && <Resources />}
         {view === "security" && <SecurityPanel />}
-        {view === "marketplace" && <PluginMarketplace />}
       </main>
     </div>
   );

@@ -97,14 +97,14 @@ async def _bump_conversation(conv_id: str, model: str):
 def _fallback_chat_content(model: str, latest_user_message: str, task_handoff: Optional[dict], error: Exception) -> str:
     if task_handoff:
         return (
-            f"Oxy could not reach the selected model `{model}` right now.\n\n"
+            f"Caret could not reach the selected model `{model}` right now.\n\n"
             f"I still created a supervised task: {task_handoff['title']}.\n"
             f"Executor: {task_handoff['assigned_executor']} / {task_handoff['execution_domain']}.\n"
             f"Next: {task_handoff['next_suggested_action']}"
         )
     summary = latest_user_message[:120] if latest_user_message else "your request"
     return (
-        f"Oxy could not reach the selected model `{model}` right now.\n\n"
+        f"Caret could not reach the selected model `{model}` right now.\n\n"
         f"I received {summary!r}, but there is no live LLM response available in this environment. "
         f"Check provider credentials or local Ollama availability."
     )

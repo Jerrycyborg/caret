@@ -1,157 +1,39 @@
-# Oxy Core Blueprint
+# Caret Core Blueprint
 
-## Source Role
+Caret is a supervised local OS assistant focused on device care.
 
-This is the top product document for the repo.
+## Core Identity
 
-Use the source-of-truth order:
+Caret is:
+- local-first
+- support-first
+- lightweight
+- policy-bounded
+- safe around privileged actions
 
-1. `build/Core_blueprint.md`
-2. `build/BUILD_BLUEPRINT.md`
-3. `AAHP.md`
+Caret is not a general plugin marketplace, not a visible workflow engine, and not a public multi-agent surface.
+Dormant executor/task infrastructure may remain behind the scenes for stability, but the visible product is narrowed to device support.
 
-## Product Direction
+## Main Product Lanes
 
-Oxy is a supervised local orchestration kernel for macOS and Ubuntu.
+- `Sessions` for support conversations and guided help
+- `Support` for incidents, monitoring, auto-fix, escalation, and ticketing
+- `System` for readable machine status
+- `Security` for privileged machine visibility and controlled actions
+- `Settings` for local model setup, Jira config, and deployment policy
 
-It is:
+## Architectural Guardrails
 
-- a local-first device and developer assistant
-- the main reporting surface for connected executor systems
-- the control layer above OpenClaw and Wraith
+- Tauri shell stays thin
+- Rust owns privileged local actions
+- local backend stays loopback-only
+- support incidents remain the main visible work unit
+- auto-fix stays deterministic and auditable
+- optional local models must not bloat the installer
 
-Target behavior:
+## Near-Term Priority
 
-- plan
-- ask
-- execute
-- observe
-- suggest next move
-
-Oxy is not just chat, not an unrestricted autonomous agent, and not yet a multi-agent system.
-
-## Core System Shape
-
-### Frontend
-
-Owns:
-
-- chat
-- session switching
-- support
-- workflows
-- approvals
-- execution timeline
-- system panels
-
-### Backend
-
-Owns:
-
-- conversation context
-- multi-channel session routing
-- session/task orchestration
-- execution-domain routing
-- task and step state machine
-- task-level approval policy with privileged boundaries
-- tool registry and safe local adapters
-
-### Rust/Tauri
-
-Owns:
-
-- system inspection
-- privileged OS actions
-- platform-native security and machine control
-
-Rule:
-
-- backend tools handle local repo and workflow tasks
-- privileged OS mutations stay in Rust only
-
-## Current Milestone Track
-
-### Milestone 1
-
-Viable Oxy kernel:
-
-- backend session/task orchestrator
-- task + step state model
-- approvals, executions, policy events
-- SQLite persistence
-- task list, approval panel, timeline
-
-### Milestone 2
-
-Local adapter layer:
-
-- tool registry
-- file read/write
-- git status/diff
-- git log/show
-- project tree/read-many/search
-- bounded shell/build execution
-
-### Milestone 3
-
-Local hub + external executor alignment:
-
-- multi-channel sessions
-- task classes and execution domains
-- task-level approval with privileged boundaries
-- executor adapters for:
-  - local device support
-  - local developer support
-  - OpenClaw
-  - Wraith
-- desktop as the main reporting console
-
-### Milestone 4
-
-Dedicated local support lane:
-
-- `Support` and `Workflows` split in the UI
-- support incidents stay on the shared task engine with explicit support metadata
-- rule-based watcher lifecycle:
-  - `healthy`
-  - `monitoring`
-  - `action_required`
-  - `fix_queued`
-  - `fixed`
-  - `blocked`
-  - `escalated`
-- safe local auto-fix allowlist only
-
-### Milestone 5
-
-Org-ready support operations:
-
-- deployment-level support, workflow, and ticketing config
-- manual IT ticket creation from Support incidents
-- Jira as the first ticket adapter behind Oxy
-- org-ready single-tenant deployment model without multi-tenant redesign
-
-### Milestone 6
-
-Windows direct-install packaging:
-
-- packaged MSI and setup EXE artifacts
-- bundled backend sidecar EXE
-- GitHub Releases as the primary Windows delivery path
-- installed-app flow instead of source-run as the default Windows experience
-
-### Deferred
-
-- browser/API adapters
-- plugin sandbox and plugin manifest
-- hardware/model routing
-- autonomous multi-agent orchestration beyond supervised agent roles
-
-## Operating Rules
-
-- extend the current repo, do not redesign it
-- prefer small additive backend services and routes
-- keep chat usable without requiring task creation
-- use task-level approval by default for mutating plans
-- use explicit boundary approval for privileged local actions
-- keep docs compact and update only the tracked source-of-truth files
+1. stability of installed app behavior
+2. support automation and safe remediation
+3. lightweight local-model setup
+4. org-ready ticketing and deployment config

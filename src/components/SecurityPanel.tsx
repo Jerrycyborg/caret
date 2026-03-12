@@ -110,7 +110,7 @@ export default function SecurityPanel() {
     <div className="security-panel">
       <h2>Security & Privacy</h2>
       <div style={{ fontSize: 13, color: "#888", marginBottom: 12 }}>
-        Tier 1 operations below are read-only. Tier 2 actions require explicit approval before Oxy will execute them.
+        Tier 1 operations below are read-only. Tier 2 actions require explicit approval before Caret will execute them.
       </div>
       <button className="btn-refresh" onClick={refreshAll} disabled={refreshing}>
         {refreshing ? "Refreshing…" : "↻ Refresh"}

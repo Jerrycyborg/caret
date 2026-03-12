@@ -23,7 +23,7 @@ async def lifespan(app: FastAPI):
         await daemon_task
 
 
-app = FastAPI(title="Oxy Backend", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Caret Backend", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

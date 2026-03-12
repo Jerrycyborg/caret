@@ -116,7 +116,7 @@ def _build_jira_payload(config: dict[str, Any], incident_detail: dict[str, Any])
                 }
             ],
         },
-        "labels": ["oxy", "support_incident", *(config.get("jira_default_labels") or [])],
+        "labels": ["caret", "support_incident", *(config.get("jira_default_labels") or [])],
     }
     components = config.get("jira_default_components") or []
     if components:
@@ -137,7 +137,7 @@ def _build_jira_description(incident_detail: dict[str, Any]) -> str:
         f"Severity: {task.get('support_severity') or incident['decision_kind']}",
         f"Reason: {incident.get('decision_reason') or 'n/a'}",
         f"Detected: {incident.get('detected_at') or task.get('created_at')}",
-        f"Suggested next action: {task.get('next_suggested_action') or 'review in Oxy'}",
+        f"Suggested next action: {task.get('next_suggested_action') or 'review in Caret'}",
         "",
         "Recommended fixes:",
     ]
@@ -163,7 +163,7 @@ async def _attach_support_artifacts(config: dict[str, Any], ticket_id: str, inci
     if not ticket_id:
         return 0
     attachment_text = _build_attachment_text(incident_detail)
-    filename = f"oxy-incident-{incident_detail['task']['id'][:8]}.txt"
+    filename = f"caret-incident-{incident_detail['task']['id'][:8]}.txt"
     content_type = mimetypes.guess_type(filename)[0] or "text/plain"
     body, boundary = _multipart_body(filename, attachment_text.encode("utf-8"), content_type)
     url = config["jira_base_url"].rstrip("/") + f"/rest/api/3/issue/{ticket_id}/attachments"
@@ -218,7 +218,7 @@ async def _jira_request_bytes(config: dict[str, Any], url: str, body: bytes, hea
 
 
 def _multipart_body(filename: str, content: bytes, content_type: str) -> tuple[bytes, str]:
-    boundary = "oxy-" + uuid.uuid4().hex
+    boundary = "caret-" + uuid.uuid4().hex
     parts = [
         f"--{boundary}\r\n".encode("utf-8"),
         f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'.encode("utf-8"),

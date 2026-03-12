@@ -1,14 +1,14 @@
 [package]
-name = "oxy"
+name = "caret"
 version = "0.1.0"
-description = "Oxy — AI-Powered Personal OS Assistant"
+description = "Caret — Device Care Assistant"
 authors = ["TWS Partners AG"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
-name = "oxy_lib"
+name = "caret_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

@@ -7,8 +7,6 @@ interface Conversation {
   model: string;
   channel_type: string;
   session_status: string;
-  last_task_id?: string | null;
-  last_executor?: string | null;
 }
 
 interface SidebarProps {
@@ -24,11 +22,9 @@ const BACKEND_URL = "http://localhost:8000";
 
 const navItems: { id: View; label: string; icon: string }[] = [
   { id: "chat", label: "Sessions", icon: "💬" },
-  { id: "tasks", label: "Workflows", icon: "🧭" },
   { id: "support", label: "Support", icon: "🩺" },
   { id: "resources", label: "System", icon: "📊" },
   { id: "security", label: "Security", icon: "🔒" },
-  { id: "marketplace", label: "Marketplace", icon: "🧩" },
   { id: "settings", label: "Settings", icon: "⚙️" },
 ];
 
@@ -52,7 +48,7 @@ export default function Sidebar({
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <span className="logo-text">OXY</span>
+        <span className="logo-text">CARET</span>
       </div>
       <nav className="sidebar-nav">
         {navItems.map((item) => (
@@ -82,17 +78,10 @@ export default function Sidebar({
               <span className="conv-meta-row">
                 <span className={`conv-channel channel-${c.channel_type}`}>{c.channel_type}</span>
                 <span className={`conv-status status-${c.session_status}`}>{c.session_status}</span>
-                {c.last_executor && ["openclaw_executor", "wraith_executor"].includes(c.last_executor) && (
-                  <span className={`conv-link ${c.last_executor === "openclaw_executor" ? "link-openclaw" : "link-wraith"}`}>
-                    {c.last_executor === "openclaw_executor" ? "openclaw-linked" : "wraith-linked"}
-                  </span>
-                )}
               </span>
             </button>
           ))}
-          {conversations.length === 0 && (
-            <span className="conv-empty">No chats yet</span>
-          )}
+          {conversations.length === 0 && <span className="conv-empty">No chats yet</span>}
         </div>
       </div>
     </aside>

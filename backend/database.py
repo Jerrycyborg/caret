@@ -2,7 +2,7 @@ import aiosqlite
 import os
 from pathlib import Path
 
-DB_PATH = Path(os.environ.get("OXY_DB_PATH", str(Path.home() / ".oxy" / "oxy.db")))
+DB_PATH = Path(os.environ.get("CARET_DB_PATH", str(Path.home() / ".caret" / "caret.db")))
 
 
 async def init_db():
@@ -59,7 +59,7 @@ async def init_db():
                 summary TEXT NOT NULL DEFAULT '',
                 task_class TEXT NOT NULL DEFAULT 'general_local_assistance',
                 execution_domain TEXT NOT NULL DEFAULT 'local_device',
-                reporting_target TEXT NOT NULL DEFAULT 'oxy',
+                reporting_target TEXT NOT NULL DEFAULT 'caret',
                 approval_scope TEXT NOT NULL DEFAULT 'none',
                 assigned_executor TEXT NOT NULL DEFAULT 'local_device_executor',
                 result_channel TEXT NOT NULL DEFAULT 'session',
@@ -184,7 +184,7 @@ async def init_db():
         await _ensure_column(db, "conversations", "last_agent_state", "TEXT NOT NULL DEFAULT ''")
         await _ensure_column(db, "tasks", "task_class", "TEXT NOT NULL DEFAULT 'general_local_assistance'")
         await _ensure_column(db, "tasks", "execution_domain", "TEXT NOT NULL DEFAULT 'local_device'")
-        await _ensure_column(db, "tasks", "reporting_target", "TEXT NOT NULL DEFAULT 'oxy'")
+        await _ensure_column(db, "tasks", "reporting_target", "TEXT NOT NULL DEFAULT 'caret'")
         await _ensure_column(db, "tasks", "approval_scope", "TEXT NOT NULL DEFAULT 'none'")
         await _ensure_column(db, "tasks", "assigned_executor", "TEXT NOT NULL DEFAULT 'local_device_executor'")
         await _ensure_column(db, "tasks", "result_channel", "TEXT NOT NULL DEFAULT 'session'")

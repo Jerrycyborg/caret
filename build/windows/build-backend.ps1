@@ -27,12 +27,12 @@ try {
   python -m pip install --upgrade pip
   python -m pip install -r backend/requirements.txt pyinstaller
 
-  Write-Step "Building Oxy backend sidecar"
+  Write-Step "Building Caret backend sidecar"
   python -m PyInstaller `
     --noconfirm `
     --clean `
     --onefile `
-    --name oxy-backend `
+    --name caret-backend `
     --distpath "$distPath" `
     --workpath "$workPath" `
     --specpath "$specPath" `
@@ -46,8 +46,8 @@ try {
     --hidden-import litellm `
     backend/windows_entry.py
 
-  Copy-Item "$distPath/oxy-backend.exe" "$outputPath/oxy-backend.exe" -Force
-  "generated-by-build-backend" | Set-Content "$outputPath/oxy-backend.manifest"
+  Copy-Item "$distPath/caret-backend.exe" "$outputPath/caret-backend.exe" -Force
+  "generated-by-build-backend" | Set-Content "$outputPath/caret-backend.manifest"
 } finally {
   Pop-Location
 }

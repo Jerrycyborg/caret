@@ -31,22 +31,15 @@ type ConfigState = {
     default_escalation_policy: string;
     allowed_remediation_classes: string[];
   };
-  workflow_policy: {
-    task_plan_approval_default: boolean;
-    openclaw_enabled: boolean;
-    wraith_enabled: boolean;
-  };
   integrations: {
     telegram_enabled: boolean;
     whatsapp_enabled: boolean;
-    openclaw_enabled: boolean;
-    wraith_enabled: boolean;
   };
 };
 
 const PROVIDERS: ProviderDef[] = [
-  { id: "ollama", name: "Ollama", icon: "🦙", desc: "Local model endpoint.", placeholder: "http://localhost:11434" },
-  { id: "openai", name: "OpenAI", icon: "⚡", desc: "Hosted general-purpose models.", placeholder: "sk-..." },
+  { id: "ollama", name: "Local model", icon: "🦙", desc: "Optional local runtime. Keep Caret usable even if no model is configured.", placeholder: "http://localhost:11434" },
+  { id: "openai", name: "OpenAI", icon: "⚡", desc: "Hosted assistant model access.", placeholder: "sk-..." },
   { id: "anthropic", name: "Anthropic", icon: "🧠", desc: "Claude family models.", placeholder: "sk-ant-..." },
   { id: "gemini", name: "Google Gemini", icon: "✨", desc: "Gemini API access.", placeholder: "AIza..." },
   { id: "azure", name: "Azure OpenAI", icon: "☁️", desc: "Enterprise OpenAI via Azure.", placeholder: "Azure API key" },
@@ -71,16 +64,9 @@ const EMPTY_CONFIG: ConfigState = {
     default_escalation_policy: "manual_review",
     allowed_remediation_classes: ["cleanup_candidates", "diagnostics", "readiness_refresh"],
   },
-  workflow_policy: {
-    task_plan_approval_default: true,
-    openclaw_enabled: true,
-    wraith_enabled: true,
-  },
   integrations: {
     telegram_enabled: false,
     whatsapp_enabled: false,
-    openclaw_enabled: true,
-    wraith_enabled: true,
   },
 };
 
@@ -168,13 +154,13 @@ export default function Settings() {
       <div className="settings-header">
         <div>
           <div className="settings-title">Settings</div>
-          <div className="settings-subtitle">Deployment config, ticketing, policy defaults, runtime behavior, and operator preferences.</div>
+          <div className="settings-subtitle">Local model setup, Jira ticketing, support policy, and deployment identity.</div>
         </div>
       </div>
 
       <div className="settings-layout">
         <section className="settings-panel">
-          <div className="settings-section-title">AI Providers</div>
+          <div className="settings-section-title">Models</div>
           <div className="settings-scroll">
             {PROVIDERS.map((provider) => {
               const status = keyStatuses[provider.id];
@@ -212,7 +198,7 @@ export default function Settings() {
         </section>
 
         <section className="settings-panel">
-          <div className="settings-section-title">Org Identity</div>
+          <div className="settings-section-title">Org and Ticketing</div>
           <div className="settings-scroll">
             <div className="settings-card">
               <strong>Deployment</strong>
@@ -224,7 +210,7 @@ export default function Settings() {
             </div>
 
             <div className="settings-card">
-              <strong>Ticketing</strong>
+              <strong>Jira ticketing</strong>
               <div className="provider-input-row settings-form-row">
                 <input className="provider-input" placeholder="Jira base URL" value={config.ticketing.jira_base_url} onChange={(e) => setConfig((prev) => ({ ...prev, ticketing: { ...prev.ticketing, jira_base_url: e.target.value } }))} />
                 <input className="provider-input" placeholder="Project key" value={config.ticketing.jira_project_key} onChange={(e) => setConfig((prev) => ({ ...prev, ticketing: { ...prev.ticketing, jira_project_key: e.target.value } }))} />
@@ -246,11 +232,11 @@ export default function Settings() {
         </section>
 
         <section className="settings-panel">
-          <div className="settings-section-title">Support Policy</div>
+          <div className="settings-section-title">Support and Channels</div>
           <div className="settings-scroll">
             <div className="settings-card">
               <strong>Auto-fix policy</strong>
-              <div className="settings-line">Support uses deployment-level policy, not user-level preferences.</div>
+              <div className="settings-line">Caret stays lightweight by keeping support deterministic and policy-driven.</div>
               <label className="settings-toggle">
                 <input type="checkbox" checked={config.support_policy.auto_fix_enabled} onChange={(e) => setConfig((prev) => ({ ...prev, support_policy: { ...prev.support_policy, auto_fix_enabled: e.target.checked } }))} />
                 <span>Enable safe auto-fix queue runner</span>
@@ -263,29 +249,7 @@ export default function Settings() {
             </div>
 
             <div className="settings-card">
-              <strong>Workflow policy</strong>
-              <label className="settings-toggle">
-                <input type="checkbox" checked={config.workflow_policy.task_plan_approval_default} onChange={(e) => setConfig((prev) => ({ ...prev, workflow_policy: { ...prev.workflow_policy, task_plan_approval_default: e.target.checked } }))} />
-                <span>Require task plan approval by default</span>
-              </label>
-              <label className="settings-toggle">
-                <input type="checkbox" checked={config.workflow_policy.openclaw_enabled} onChange={(e) => setConfig((prev) => ({ ...prev, workflow_policy: { ...prev.workflow_policy, openclaw_enabled: e.target.checked } }))} />
-                <span>Enable OpenClaw delegation</span>
-              </label>
-              <label className="settings-toggle">
-                <input type="checkbox" checked={config.workflow_policy.wraith_enabled} onChange={(e) => setConfig((prev) => ({ ...prev, workflow_policy: { ...prev.workflow_policy, wraith_enabled: e.target.checked } }))} />
-                <span>Enable Wraith delegation</span>
-              </label>
-              <button className="btn-save" onClick={() => saveSection("workflow_policy")} disabled={saving.workflow_policy}>{feedback.workflow_policy || (saving.workflow_policy ? "…" : "Save workflow policy")}</button>
-            </div>
-          </div>
-        </section>
-
-        <section className="settings-panel">
-          <div className="settings-section-title">Integrations</div>
-          <div className="settings-scroll">
-            <div className="settings-card">
-              <strong>Channel and executor availability</strong>
+              <strong>Channel availability</strong>
               <label className="settings-toggle">
                 <input type="checkbox" checked={config.integrations.telegram_enabled} onChange={(e) => setConfig((prev) => ({ ...prev, integrations: { ...prev.integrations, telegram_enabled: e.target.checked } }))} />
                 <span>Telegram enabled</span>
@@ -294,20 +258,7 @@ export default function Settings() {
                 <input type="checkbox" checked={config.integrations.whatsapp_enabled} onChange={(e) => setConfig((prev) => ({ ...prev, integrations: { ...prev.integrations, whatsapp_enabled: e.target.checked } }))} />
                 <span>WhatsApp enabled</span>
               </label>
-              <label className="settings-toggle">
-                <input type="checkbox" checked={config.integrations.openclaw_enabled} onChange={(e) => setConfig((prev) => ({ ...prev, integrations: { ...prev.integrations, openclaw_enabled: e.target.checked } }))} />
-                <span>OpenClaw enabled</span>
-              </label>
-              <label className="settings-toggle">
-                <input type="checkbox" checked={config.integrations.wraith_enabled} onChange={(e) => setConfig((prev) => ({ ...prev, integrations: { ...prev.integrations, wraith_enabled: e.target.checked } }))} />
-                <span>Wraith enabled</span>
-              </label>
-              <button className="btn-save" onClick={() => saveSection("integrations")} disabled={saving.integrations}>{feedback.integrations || (saving.integrations ? "…" : "Save integrations")}</button>
-            </div>
-
-            <div className="settings-card">
-              <strong>Operator rule</strong>
-              <div className="settings-line">Workflows are supervised non-support jobs. Support incidents stay in the Support lane and can link out to IT tickets.</div>
+              <button className="btn-save" onClick={() => saveSection("integrations")} disabled={saving.integrations}>{feedback.integrations || (saving.integrations ? "…" : "Save channels")}</button>
             </div>
           </div>
         </section>

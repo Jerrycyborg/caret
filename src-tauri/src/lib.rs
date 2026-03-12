@@ -71,7 +71,7 @@ fn backend_sidecar_path(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
     use tauri::path::BaseDirectory;
 
     app.path()
-        .resolve("resources/windows/oxy-backend.exe", BaseDirectory::Resource)
+        .resolve("resources/windows/caret-backend.exe", BaseDirectory::Resource)
         .ok()
         .filter(|path| path.exists())
 }
@@ -393,7 +393,7 @@ pub fn run() {
 
     let app = builder
         .build(tauri::generate_context!())
-        .expect("error while building Oxy");
+        .expect("error while building Caret");
 
     app
         .run(|_app, _event| {

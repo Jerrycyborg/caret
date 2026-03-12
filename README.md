@@ -1,273 +1,63 @@
-<div align="center">
+<img src="assets/readme-banner.svg" alt="Caret banner" width="100%" />
 
-<img src="assets/readme-banner.svg" alt="Oxy banner" width="100%" />
+# Caret
 
-# Oxy
+Caret is a lightweight local OS assistant for device care, support automation, and safe remediation.
 
-### Local-first AI operator hub for macOS, Ubuntu, and a tracked Windows lane
+## Product Direction
 
-<p>
-  <strong>Tauri 2</strong>
-  ·
-  <strong>React 19</strong>
-  ·
-  <strong>Rust</strong>
-  ·
-  <strong>FastAPI</strong>
-  ·
-  <strong>SQLite</strong>
-</p>
+Caret is being built as:
+- a local-first device assistant
+- a support-first desktop app for monitoring, cleanup, and small-issue remediation
+- a control surface for incidents, escalations, and IT ticketing
+- a lightweight packaged app with a bundled local backend and optional local model setup
 
-<p><strong>Plan → Ask → Execute → Observe → Report back</strong></p>
+Caret does **not** expose Marketplace or Workflows as visible product lanes.
+Those older capabilities remain dormant in the forked codebase for stability, but the visible product is focused on device support.
 
-</div>
+## Visible App Surface
 
----
+- `Sessions`
+- `Support`
+- `System`
+- `Security`
+- `Settings`
 
-> Oxy is the user-facing control layer.
-> It helps on the local machine, routes work to connected executors, and keeps results, approvals, and reporting in one place.
+## What Caret Does Today
 
-## Why Oxy
+- monitors local device health and creates support incidents
+- runs safe auto-fixes for bounded cleanup and readiness tasks
+- keeps privileged actions behind Rust-backed approval boundaries
+- creates Jira tickets from support incidents
+- ships as a Windows desktop installer with a bundled backend sidecar
 
-Oxy is being built as:
+## Packaging Direction
 
-- a device-support assistant living on the machine
-- a developer-support assistant for local project work
-- a supervised operator shell for desktop, Telegram, and WhatsApp sessions
-- the main reporting surface above OpenClaw and Wraith
-
-It is not:
-
-- a chat-only wrapper
-- an unrestricted autonomous agent
-- a peer orchestrator beside OpenClaw or Wraith
-
-## Product Shape
-
-Oxy currently follows one control model:
-
-1. user asks through a session
-2. Oxy classifies the task
-3. Oxy plans the work
-4. Oxy asks for approval when required
-5. Oxy executes locally or delegates to an executor
-6. Oxy reports progress and results back into the session
-
-## Architecture
-
-| Layer | Responsibility |
-|---|---|
-| Frontend | Sessions, chat, support, workflows, approvals, timeline, operator console surfaces |
-| Backend | Orchestration, task routing, approval policy, executor selection, reporting |
-| Rust / Tauri | Privileged local OS actions, system inspection, machine control |
-
-Core rule:
-
-- backend handles supervised task orchestration
-- Rust owns privileged local machine actions
-- OpenClaw and Wraith stay behind Oxy as executor systems
-
-## What Oxy Can Do Today
-
-### Sessions and Reporting
-
-- desktop sessions
-- Telegram/WhatsApp session contracts
-- task and execution state attached to sessions
-- session source and state visible in the UI
-
-### Support Lane
-
-- local-first support incidents for:
-  - disk pressure
-  - performance pressure
-  - meeting app pressure
-  - camera/audio readiness
-  - printer/network readiness
-  - startup/background load
-- deterministic watcher lifecycle:
-  - `monitoring`
-  - `action_required`
-  - `fix_queued`
-  - `fixed`
-  - `blocked`
-  - `escalated`
-- safe auto-fix queue for non-privileged remediation only
-- queued safe fixes can now complete automatically or be run manually from Support
-- manual IT ticket creation from Support with Jira as the first adapter
-- support history, escalations, and queued fixes in a dedicated Support view
-
-### Workflow Lane
-
-- task classes:
-  - `device_support`
-  - `developer_support`
-  - `project_build`
-  - `security_assessment`
-  - `security_review`
-  - `general_local_assistance`
-- execution domains:
-  - `local_device`
-  - `local_dev`
-  - `openclaw`
-  - `wraith`
-- task-level plan approval
-- explicit privileged boundary approval
-- execution timeline and approval history
-
-### Executors
-
-- `local_device_executor`
-- `local_dev_executor`
-- `openclaw_executor`
-- `wraith_executor`
-
-### Local Adapters
-
-- `file.read`
-- `file.write`
-- `git.status`
-- `git.diff`
-- `git.log`
-- `git.show`
-- `project.search`
-- `project.tree`
-- `project.read_many`
-- bounded `shell.run`
-- allowlisted `build.run`
-
-## Current Direction
-
-The repo is moving toward a local-first operator hub where:
-
-- Oxy is the main UI and reporting surface
-- local device support is a first-class product lane, not a side panel
-- OpenClaw handles build and software execution work
-- Wraith handles specialist security workflows
-- device-level assistance remains a first-class local capability
-
-## Quick Start
-
-### Prerequisites
-
-- Node.js 18+
-- Rust toolchain
-- Python 3.9+
-
-### Install
-
-```sh
-npm install
-```
-
-### Windows One-Command Install From Git
-
-From PowerShell on Windows, run:
-
-```powershell
-git clone <your-oxy-repo-url> "$env:LOCALAPPDATA\Oxy\src"; Set-Location "$env:LOCALAPPDATA\Oxy\src"; powershell -ExecutionPolicy Bypass -File .\build\windows\install-from-git.ps1
-```
-
-What it does:
-
-- installs missing prerequisites with `winget` if needed
-- creates `.env` from `.env.example` if missing
-- builds the Windows MSI locally
-- installs Oxy
-- launches the installed app
-
-### Windows Normal Install
-
-For normal Windows use, install Oxy from GitHub Releases:
-
-- download the `.msi` for managed or enterprise deployment
-- download the setup `.exe` for direct user install
-
-The Windows package now includes:
-
+Caret keeps the installer light by bundling:
 - the Tauri desktop shell
-- a bundled backend sidecar EXE that starts automatically with Oxy
-- no required Python install on the target machine
+- the Rust runtime
+- the local backend sidecar
+- SQLite state
 
-### Run Backend
+Caret does not bundle:
+- model weights
+- Docker
+- a full BitNet runtime stack
 
-```sh
-npm run backend
-```
+Local model support should stay optional and use an Ollama-compatible runtime on first setup rather than inflating the installer.
 
-### Run Desktop App
+## Fork Lineage
 
-```sh
-npm run tauri dev
-```
+Caret was forked from the personal Oxy baseline tag:
+- `personal-oxy-baseline-v0.6.2`
 
-## Verification
+Oxy remains the personal/internal branch.
+Caret is the narrowed product track.
 
-```sh
-npm run verify:frontend
-npm run verify:rust
-npm run verify:all
-python3 -m unittest discover backend/tests
-./build/ci/verify-security.sh
-```
+## Source of Truth
 
-## Security Posture
-
-- privileged local actions remain in Rust
-- provider secrets and Jira token are runtime/env-only, not persisted in SQLite
-- the unused Tauri shell capability has been removed from the desktop runtime
-- the vulnerable `glib 0.18` dependency path is patched locally through a vendored gtk-rs-core subset until the upstream Tauri/Linux stack moves to a fixed line
-- the security baseline verifies:
-  - no shell capability regression
-  - no `sh -c` regression
-  - no secret persistence regression
-
-Use [/.env.example](/Users/marshal/Library/CloudStorage/OneDrive-TWSPartnersAG/Dokumente/Internal%20projects/Oxy/.env.example) as the deployment config template.
-
-## Release Tracking
-
-- current version: `0.5.1`
-- current milestone: `Org-Ready Support Operations`
-- machine-readable release state: [release.json](/Users/marshal/Library/CloudStorage/OneDrive-TWSPartnersAG/Dokumente/Internal%20projects/Oxy/release.json)
-- milestone history: [CHANGELOG.md](/Users/marshal/Library/CloudStorage/OneDrive-TWSPartnersAG/Dokumente/Internal%20projects/Oxy/CHANGELOG.md)
-
-Current local note:
-
-- `tsc && vite build` is passing
-- backend import/startup is passing
-- Jest has intermittently failed on this cloud-synced workspace with `ETIMEDOUT` reads from `node_modules`
-
-## Source Of Truth
-
-The repo should be resumed in this order:
-
-1. `build/Core_blueprint.md`
-2. `build/BUILD_BLUEPRINT.md`
-3. `AAHP.md`
-
-## Current Boundaries
-
-In scope now:
-
-- dedicated `Support` and `Workflows` product lanes
-- orchestrator hardening
-- local support watcher, incident queue, safe auto-fix metadata, and ticket linking
-- executor integration contracts
-- approval and reporting cohesion
-- session-centric operator UX
-- deployment-level org/ticketing/policy config
-
-Still deferred:
-
-- live OpenClaw integration
-- live Wraith integration
-- real Telegram/WhatsApp provider wiring
-- broader Windows field validation and signing after the packaged sidecar release path
-- browser/API adapters
-- plugin sandbox
-- hardware/model routing
-- autonomous multi-agent runtime
-
-## Repo Rule
-
-Extend the current repo. Do not redesign it.
+- [build/Core_blueprint.md](/Users/marshal/Library/CloudStorage/OneDrive-TWSPartnersAG/Dokumente/Internal%20projects/Caret/build/Core_blueprint.md)
+- [build/BUILD_BLUEPRINT.md](/Users/marshal/Library/CloudStorage/OneDrive-TWSPartnersAG/Dokumente/Internal%20projects/Caret/build/BUILD_BLUEPRINT.md)
+- [AAHP.md](/Users/marshal/Library/CloudStorage/OneDrive-TWSPartnersAG/Dokumente/Internal%20projects/Caret/AAHP.md)
+- [release.json](/Users/marshal/Library/CloudStorage/OneDrive-TWSPartnersAG/Dokumente/Internal%20projects/Caret/release.json)
+- [CHANGELOG.md](/Users/marshal/Library/CloudStorage/OneDrive-TWSPartnersAG/Dokumente/Internal%20projects/Caret/CHANGELOG.md)
