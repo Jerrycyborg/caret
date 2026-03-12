@@ -12,6 +12,7 @@ from typing import Any
 import aiosqlite
 
 from database import get_db_path
+from services.config import get_config_section
 from services.orchestrator import (
     TASK_STATUS_COMPLETED,
     TASK_STATUS_FAILED,
@@ -130,10 +131,15 @@ async def support_daemon_status() -> dict[str, Any]:
                 "category": row["category"],
                 "title": row["title"],
                 "severity": row["severity"],
+                "decision_kind": "monitoring",
+                "decision_reason": "Signal crossed the early-warning threshold but has not become actionable yet.",
                 "summary": row["summary"],
                 "recommended_fixes": fixes,
                 "last_task_id": row["last_task_id"],
                 "trigger_count": row["trigger_count"],
+                "source_signal": row["issue_key"],
+                "detected_at": row["last_seen_at"],
+                "last_decision_at": row["last_seen_at"],
             }
         )
 
@@ -276,12 +282,12 @@ def evaluate_support_snapshot(snapshot: SupportSnapshot) -> list[SupportIssue]:
             SupportIssue(
                 key="camera_audio_readiness",
                 category="camera_audio",
-                severity="escalated",
+                severity="action_required",
                 title="Camera and audio readiness",
                 summary="Meeting activity is present but no camera/audio service signal was detected.",
                 prompt="Inspect camera/audio readiness and prepare supervised remediation before the next meeting.",
-                recommended_fixes=["check media permissions", "inspect audio/video helper services"],
-                escalation_reason="Camera or audio readiness may require privileged or permission-sensitive intervention.",
+                recommended_fixes=["refresh readiness checks", "inspect media permissions", "inspect audio/video helper services"],
+                auto_fix_kind="refresh_readiness",
             )
         )
 
@@ -315,11 +321,12 @@ def evaluate_support_snapshot(snapshot: SupportSnapshot) -> list[SupportIssue]:
             SupportIssue(
                 key="printer_network_readiness",
                 category="printer_network",
-                severity="monitoring",
+                severity="action_required",
                 title="Printer and network readiness",
                 summary=f"Detected {snapshot.active_connections} active connections and no printer service signal.",
                 prompt="Monitor printer/network readiness and prepare diagnosis if connectivity degrades.",
-                recommended_fixes=["watch network-heavy apps", "inspect printer/network service availability"],
+                recommended_fixes=["refresh readiness checks", "watch network-heavy apps", "inspect printer/network service availability"],
+                auto_fix_kind="refresh_readiness",
             )
         )
 
@@ -339,7 +346,7 @@ async def run_support_daemon(stop_event: asyncio.Event) -> None:
             _daemon_state["last_issues"] = [asdict(issue) for issue in issues]
             _daemon_state["last_error"] = ""
             await _persist_support_issues(issues)
-            await process_support_fix_queue()
+            await process_support_fix_queue(cycle_started_at=now.isoformat())
         except Exception as exc:
             _daemon_state["last_error"] = str(exc)
         try:
@@ -434,41 +441,81 @@ async def _ensure_support_task(issue: SupportIssue, existing: dict[str, Any] | N
 
     auto_fix = _auto_fix_for_issue(issue)
     support_severity = issue.severity
+    detected_at = datetime.now(timezone.utc).isoformat()
     context = {
         "task_kind": "support_incident",
         "support_category": issue.category,
         "support_severity": issue.severity,
+        "support_decision_reason": _decision_reason_for_issue(issue, issue.severity),
+        "support_recommended_fixes": issue.recommended_fixes,
+        "support_source_signal": issue.key,
+        "support_detected_at": detected_at,
+        "support_last_decision_at": detected_at,
         "trigger_source": "watcher",
         "auto_fix_eligible": bool(auto_fix),
-        "auto_fix_attempted": bool(auto_fix),
+        "auto_fix_attempted": False,
         "auto_fix_result": "",
     }
     if auto_fix:
-        context["support_severity"] = auto_fix["support_severity"]
-        context["auto_fix_result"] = auto_fix["result"]
-        support_severity = auto_fix["support_severity"]
+        context["support_severity"] = "fix_queued"
+        context["support_decision_reason"] = auto_fix["queue_reason"]
+        context["auto_fix_result"] = auto_fix["queue_result"]
+        support_severity = "fix_queued"
     elif issue.escalation_reason:
         context["support_severity"] = "escalated"
+        context["support_decision_reason"] = issue.escalation_reason
         context["auto_fix_result"] = issue.escalation_reason
         support_severity = "escalated"
 
     task = await create_task(issue.prompt, task_context=context)
+    async with aiosqlite.connect(get_db_path()) as db:
+        await _insert_policy_event(
+            db,
+            task["task"]["id"],
+            "support_issue_detected",
+            f"{issue.title} detected.",
+            {"category": issue.category, "severity": issue.severity, "signal": issue.key},
+        )
+        if support_severity == "fix_queued":
+            await _insert_policy_event(
+                db,
+                task["task"]["id"],
+                "support_fix_queued",
+                "Safe auto-fix queued for the next daemon cycle.",
+                {"category": issue.category, "signal": issue.key},
+            )
+        elif support_severity == "escalated":
+            await _insert_policy_event(
+                db,
+                task["task"]["id"],
+                "support_escalated",
+                "Incident escalated because it may require approval or privileged handling.",
+                {"category": issue.category, "signal": issue.key},
+            )
+        await db.commit()
     return task["task"]["id"], support_severity
 
 
-async def process_support_fix_queue() -> int:
+async def process_support_fix_queue(cycle_started_at: str | None = None) -> int:
     async with aiosqlite.connect(get_db_path()) as db:
         db.row_factory = aiosqlite.Row
+        where_extra = ""
+        params: list[Any] = []
+        if cycle_started_at:
+            where_extra = " AND support_last_decision_at < ?"
+            params.append(cycle_started_at)
         async with db.execute(
-            """
+            f"""
             SELECT *
             FROM tasks
             WHERE task_kind = 'support_incident'
               AND support_severity = 'fix_queued'
               AND auto_fix_eligible = 1
+              {where_extra}
             ORDER BY updated_at ASC
             LIMIT 10
-            """
+            """,
+            tuple(params),
         ) as cur:
             tasks = [dict(row) for row in await cur.fetchall()]
     applied = 0
@@ -482,13 +529,38 @@ async def run_support_fix(task_id: str) -> bool:
     task = await _fetch_task(task_id)
     if not task or task.get("task_kind") != "support_incident" or not task.get("auto_fix_eligible"):
         return False
+    support_policy = await get_config_section("support_policy")
+    if not support_policy.get("auto_fix_enabled", True):
+        return False
+    remediation_class = _remediation_class_for_category(task.get("support_category") or "")
+    if remediation_class not in set(support_policy.get("allowed_remediation_classes", [])):
+        return False
 
     result: dict[str, str]
     category = task.get("support_category") or ""
+    async with aiosqlite.connect(get_db_path()) as db:
+        await db.execute(
+            """
+            UPDATE tasks
+            SET auto_fix_attempted = 1, support_last_decision_at = ?, updated_at = datetime('now')
+            WHERE id = ?
+            """,
+            (datetime.now(timezone.utc).isoformat(), task_id),
+        )
+        await _insert_policy_event(
+            db,
+            task_id,
+            "support_fix_started",
+            "Safe auto-fix started.",
+            {"support_category": category, "platform": support_platform_id()},
+        )
+        await db.commit()
     if category == "disk":
         result = _apply_cleanup_candidate_fix()
     elif category in {"performance", "meetings"}:
         result = _apply_diagnostic_fix()
+    elif category in {"printer_network", "camera_audio"}:
+        result = _apply_readiness_refresh_fix(category)
     else:
         result = {
             "support_severity": "blocked",
@@ -496,19 +568,24 @@ async def run_support_fix(task_id: str) -> bool:
             "next_suggested_action": "Review the incident and decide whether to escalate or create a supervised workflow.",
             "event_type": "support_fix_blocked",
             "event_message": "Safe auto-fix is not available for this incident.",
+            "decision_reason": "This category has no reversible, non-privileged auto-fix in the current allowlist.",
         }
+    result = _post_fix_recheck(category, result)
 
     async with aiosqlite.connect(get_db_path()) as db:
         await db.execute(
             """
             UPDATE tasks
             SET support_severity = ?, auto_fix_attempted = 1, auto_fix_result = ?,
+                support_decision_reason = ?, support_last_decision_at = ?,
                 next_suggested_action = ?, updated_at = datetime('now')
             WHERE id = ?
             """,
             (
                 result["support_severity"],
                 result["auto_fix_result"],
+                result["decision_reason"],
+                datetime.now(timezone.utc).isoformat(),
                 result["next_suggested_action"],
                 task_id,
             ),
@@ -533,11 +610,18 @@ async def escalate_support_incident(task_id: str) -> bool:
             """
             UPDATE tasks
             SET support_severity = 'escalated',
+                support_decision_reason = ?,
+                support_last_decision_at = ?,
                 next_suggested_action = ?,
                 updated_at = datetime('now')
             WHERE id = ?
             """,
-            ("Escalated. Review the incident in Support and use Security or Workflows for supervised follow-up.", task_id),
+            (
+                "Manual escalation requested because the issue needs review or may cross a privileged boundary.",
+                datetime.now(timezone.utc).isoformat(),
+                "Escalated. Review the incident in Support and use Security or Workflows for supervised follow-up.",
+                task_id,
+            ),
         )
         await _insert_policy_event(
             db,
@@ -553,15 +637,28 @@ async def escalate_support_incident(task_id: str) -> bool:
 def _auto_fix_for_issue(issue: SupportIssue) -> dict[str, str] | None:
     if issue.auto_fix_kind == "queue_cleanup_candidates":
         return {
-            "support_severity": "fix_queued",
-            "result": "Prepared cleanup candidates for cache, temp, downloads, and build output review. No files were deleted automatically.",
+            "queue_result": "Cleanup candidates are queued for review in allowlisted cache, temp, and download locations. No files were deleted automatically.",
+            "queue_reason": "This issue matches a reversible, non-privileged cleanup-candidate workflow.",
         }
     if issue.auto_fix_kind == "capture_diagnostics":
         return {
-            "support_severity": "fix_queued",
-            "result": "Captured local diagnostics and queued supervised remediation. No processes were terminated automatically.",
+            "queue_result": "Diagnostics collection is queued for the next daemon cycle. No processes were terminated automatically.",
+            "queue_reason": "This issue matches a deterministic diagnostics capture workflow that is safe to run locally.",
+        }
+    if issue.auto_fix_kind == "refresh_readiness":
+        return {
+            "queue_result": "A local readiness refresh is queued for the next daemon cycle.",
+            "queue_reason": "This issue matches a deterministic, non-privileged readiness refresh.",
         }
     return None
+
+
+def _remediation_class_for_category(category: str) -> str:
+    if category == "disk":
+        return "cleanup_candidates"
+    if category in {"performance", "meetings"}:
+        return "diagnostics"
+    return "readiness_refresh"
 
 
 async def _fetch_task(task_id: str | None) -> dict[str, Any] | None:
@@ -598,10 +695,21 @@ def _task_to_support_incident(task: dict[str, Any]) -> dict[str, Any]:
         "status": task["status"],
         "support_category": task["support_category"],
         "support_severity": task["support_severity"],
+        "decision_kind": task["support_severity"],
+        "decision_reason": task["support_decision_reason"],
+        "recommended_fixes": json.loads(task["support_recommended_fixes_json"] or "[]"),
+        "source_signal": task["support_source_signal"],
+        "detected_at": task["support_detected_at"] or task["created_at"],
+        "last_decision_at": task["support_last_decision_at"] or task["updated_at"],
         "trigger_source": task["trigger_source"],
         "auto_fix_eligible": bool(task["auto_fix_eligible"]),
         "auto_fix_attempted": bool(task["auto_fix_attempted"]),
         "auto_fix_result": task["auto_fix_result"],
+        "external_ticket_system": task["external_ticket_system"],
+        "external_ticket_key": task["external_ticket_key"],
+        "external_ticket_url": task["external_ticket_url"],
+        "external_ticket_status": task["external_ticket_status"],
+        "external_ticket_created_at": task["external_ticket_created_at"],
         "assigned_executor": task["assigned_executor"],
         "created_at": task["created_at"],
         "updated_at": task["updated_at"],
@@ -622,8 +730,9 @@ def _apply_cleanup_candidate_fix() -> dict[str, str]:
         "support_severity": "fixed",
         "auto_fix_result": detail,
         "next_suggested_action": "Review cleanup candidates and keep monitoring disk pressure.",
-        "event_type": "support_fix_applied",
+        "event_type": "support_fix_completed",
         "event_message": "Prepared cleanup candidates for allowlisted temp/cache paths.",
+        "decision_reason": "A safe cleanup-candidate workflow completed without deleting files or requiring privileges.",
     }
 
 
@@ -635,9 +744,62 @@ def _apply_diagnostic_fix() -> dict[str, str]:
         "support_severity": "fixed",
         "auto_fix_result": f"Captured local diagnostics and refreshed the support record. Top processes: {summary}.",
         "next_suggested_action": "Review the captured diagnostics and continue monitoring for recurrence.",
-        "event_type": "support_fix_applied",
+        "event_type": "support_fix_completed",
         "event_message": "Captured local diagnostics for safe remediation.",
+        "decision_reason": "A deterministic diagnostics capture completed successfully and remained within the safe local allowlist.",
     }
+
+
+def _apply_readiness_refresh_fix(category: str) -> dict[str, str]:
+    label = "network/printer" if category == "printer_network" else "camera/audio"
+    return {
+        "support_severity": "fixed",
+        "auto_fix_result": f"Refreshed {label} readiness checks and updated the local support record. No privileged actions were performed.",
+        "next_suggested_action": "Review the refreshed readiness state and continue monitoring.",
+        "event_type": "support_fix_completed",
+        "event_message": f"Refreshed {label} readiness state.",
+        "decision_reason": "A deterministic readiness refresh completed successfully and remained within the safe local allowlist.",
+    }
+
+
+def _decision_reason_for_issue(issue: SupportIssue, severity: str) -> str:
+    if severity == "monitoring":
+        return "The signal crossed an early-warning threshold but remains below the action boundary."
+    if issue.escalation_reason:
+        return issue.escalation_reason
+    if issue.auto_fix_kind:
+        return "The issue crossed the action boundary and matches a safe non-privileged remediation pattern."
+    return "The issue crossed the action boundary but needs user review because no safe automatic remediation is allowlisted."
+
+
+def _post_fix_recheck(category: str, result: dict[str, str]) -> dict[str, str]:
+    snapshot = collect_support_snapshot()
+    updated = dict(result)
+    if category == "disk" and snapshot.disk_used_pct >= 80:
+        updated["support_severity"] = "monitoring"
+        updated["auto_fix_result"] += " Disk pressure is still elevated, so Oxy moved the incident back to monitoring."
+        updated["next_suggested_action"] = "Review the cleanup candidates and consider creating an IT ticket if storage pressure remains high."
+        updated["decision_reason"] = "The safe remediation prepared cleanup candidates, but disk pressure remains above the action threshold."
+        return updated
+    if category in {"performance", "meetings"} and max(snapshot.cpu_load_pct, snapshot.mem_used_pct, snapshot.teams_cpu_pct) >= 75:
+        updated["support_severity"] = "monitoring"
+        updated["auto_fix_result"] += " Load is still elevated, so Oxy is keeping the issue under monitoring."
+        updated["next_suggested_action"] = "Review diagnostics and escalate if the issue continues."
+        updated["decision_reason"] = "Diagnostics completed, but the machine is still under visible load."
+        return updated
+    if category == "printer_network" and not snapshot.printer_ready:
+        updated["support_severity"] = "escalated"
+        updated["auto_fix_result"] += " Printer readiness is still degraded after the refresh."
+        updated["next_suggested_action"] = "Escalate the incident or create an IT ticket for network or printer follow-up."
+        updated["decision_reason"] = "Readiness refresh completed, but the printer/network signal is still missing."
+        return updated
+    if category == "camera_audio" and not snapshot.camera_ready:
+        updated["support_severity"] = "escalated"
+        updated["auto_fix_result"] += " Camera/audio readiness is still degraded after the refresh."
+        updated["next_suggested_action"] = "Escalate the incident or create an IT ticket for media-device follow-up."
+        updated["decision_reason"] = "Readiness refresh completed, but the media readiness signal is still missing."
+        return updated
+    return updated
 
 
 def _safe_directory_size(path: Path) -> int:

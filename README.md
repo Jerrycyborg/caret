@@ -4,7 +4,7 @@
 
 # Oxy
 
-### Local-first AI operator hub for macOS and Ubuntu
+### Local-first AI operator hub for macOS, Ubuntu, and a tracked Windows lane
 
 <p>
   <strong>Tauri 2</strong>
@@ -94,6 +94,7 @@ Core rule:
   - `escalated`
 - safe auto-fix queue for non-privileged remediation only
 - queued safe fixes can now complete automatically or be run manually from Support
+- manual IT ticket creation from Support with Jira as the first adapter
 - support history, escalations, and queued fixes in a dedicated Support view
 
 ### Workflow Lane
@@ -177,11 +178,26 @@ npm run tauri dev
 npm run verify:frontend
 npm run verify:rust
 npm run verify:all
+python3 -m unittest discover backend/tests
+./build/ci/verify-security.sh
 ```
+
+## Security Posture
+
+- privileged local actions remain in Rust
+- provider secrets and Jira token are runtime/env-only, not persisted in SQLite
+- the unused Tauri shell capability has been removed from the desktop runtime
+- the security baseline verifies:
+  - no shell capability regression
+  - no `sh -c` regression
+  - no secret persistence regression
+
+Use [/.env.example](/Users/marshal/Library/CloudStorage/OneDrive-TWSPartnersAG/Dokumente/Internal%20projects/Oxy/.env.example) as the deployment config template.
 
 ## Release Tracking
 
-- current version: `0.4.0`
+- current version: `0.5.1`
+- current milestone: `Org-Ready Support Operations`
 - machine-readable release state: [release.json](/Users/marshal/Library/CloudStorage/OneDrive-TWSPartnersAG/Dokumente/Internal%20projects/Oxy/release.json)
 - milestone history: [CHANGELOG.md](/Users/marshal/Library/CloudStorage/OneDrive-TWSPartnersAG/Dokumente/Internal%20projects/Oxy/CHANGELOG.md)
 
@@ -205,17 +221,18 @@ In scope now:
 
 - dedicated `Support` and `Workflows` product lanes
 - orchestrator hardening
-- local support watcher, incident queue, and safe auto-fix metadata
+- local support watcher, incident queue, safe auto-fix metadata, and ticket linking
 - executor integration contracts
 - approval and reporting cohesion
 - session-centric operator UX
+- deployment-level org/ticketing/policy config
 
 Still deferred:
 
 - live OpenClaw integration
 - live Wraith integration
 - real Telegram/WhatsApp provider wiring
-- Windows Tauri privilege/runtime parity
+- full Windows packaging and field validation
 - browser/API adapters
 - plugin sandbox
 - hardware/model routing

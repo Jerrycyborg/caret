@@ -122,6 +122,15 @@ Dedicated local support lane:
   - `escalated`
 - safe local auto-fix allowlist only
 
+### Milestone 5
+
+Org-ready support operations:
+
+- deployment-level support, workflow, and ticketing config
+- manual IT ticket creation from Support incidents
+- Jira as the first ticket adapter behind Oxy
+- org-ready single-tenant deployment model without multi-tenant redesign
+
 ### Deferred
 
 - browser/API adapters

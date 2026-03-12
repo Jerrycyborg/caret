@@ -5,42 +5,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from routers import channels, chat, models, conversations, settings, support, tasks
-from database import init_db, get_db_path
-import aiosqlite
+from database import init_db
 from services.support_daemon import init_support_tables, run_support_daemon
 
 load_dotenv()
-
-
-PROVIDER_ENV_MAP = {
-    "openai": "OPENAI_API_KEY",
-    "anthropic": "ANTHROPIC_API_KEY",
-    "gemini": "GEMINI_API_KEY",
-    "azure": "AZURE_API_KEY",
-    "ollama": "OLLAMA_API_BASE",
-}
-
-
-async def _load_api_keys():
-    """Load API keys from DB into env vars so LiteLLM picks them up."""
-    try:
-        async with aiosqlite.connect(get_db_path()) as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute("SELECT provider, key_value FROM api_keys") as cur:
-                rows = await cur.fetchall()
-        for r in rows:
-            env_key = PROVIDER_ENV_MAP.get(r["provider"])
-            if env_key:
-                os.environ.setdefault(env_key, r["key_value"])
-    except Exception:
-        pass
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
     await init_support_tables()
-    await _load_api_keys()
     stop_event = asyncio.Event()
     daemon_task = asyncio.create_task(run_support_daemon(stop_event))
     try:

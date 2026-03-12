@@ -2,7 +2,7 @@
 
 ## Why This Build Exists
 
-This build exists to ship Oxy as an internal operator shell on macOS and Ubuntu.
+This build exists to ship Oxy as an internal operator shell on macOS, Ubuntu, and an emerging Windows lane.
 
 Near-term product goal:
 
@@ -14,7 +14,7 @@ Near-term product goal:
 
 ## Release Goal
 
-Ship Oxy as a production-grade desktop assistant for macOS and Ubuntu with:
+Ship Oxy as a production-grade desktop assistant for macOS, Ubuntu, and a tracked Windows readiness lane with:
 
 - a repeatable local verification path
 - CI that mirrors release-readiness checks
@@ -23,7 +23,7 @@ Ship Oxy as a production-grade desktop assistant for macOS and Ubuntu with:
 
 ## V1 Product Contract
 
-V1 ships as an internal-only operator shell for power users on macOS and Ubuntu.
+V1 ships as an internal-only operator shell for power users on macOS and Ubuntu, with Windows under active readiness validation.
 
 ### Audience
 
@@ -77,16 +77,39 @@ V1 ships as an internal-only operator shell for power users on macOS and Ubuntu.
 - support incident actions:
   - run safe fix
   - escalate
+  - create IT ticket
 - support incident metadata on the shared task engine:
   - `task_kind`
   - `support_category`
   - `support_severity`
+  - `support_decision_reason`
+  - `support_recommended_fixes`
+  - `support_source_signal`
+  - `support_detected_at`
+  - `support_last_decision_at`
   - `trigger_source`
   - `auto_fix_eligible`
   - `auto_fix_attempted`
   - `auto_fix_result`
+  - `external_ticket_system`
+  - `external_ticket_key`
+  - `external_ticket_url`
+  - `external_ticket_status`
+  - `external_ticket_created_at`
+- deployment-level org-ready config for:
+  - org identity
+  - ticketing
+  - support policy
+  - workflow policy
+  - integrations
+- adapter-based IT ticketing with Jira as the first implementation
 - safe auto-fix allowlist for non-privileged local remediation only
 - platform helper layer for support monitoring so Windows can be added without rewriting the watcher contract
+- runtime/env-only secret handling for provider and Jira credentials
+- lightweight security verification lane for:
+  - shell-capability regression
+  - shell interpolation regression
+  - secret persistence regression
 
 ### Non-Goals for V1
 
@@ -127,6 +150,15 @@ Proves the codebase verifies on macOS and is ready for a signed packaging pass.
 - run `npx tauri build`
 - complete the macOS release checklist before shipping
 
+### Lane 4: Windows Readiness
+
+Proves the codebase verifies on Windows and documents the remaining UAC/runtime gaps before shipping.
+
+- run frontend verification on Windows
+- run Rust verification on Windows
+- run security verification on Windows
+- complete the Windows release checklist before claiming Windows support
+
 ## Build Structure
 
 Fixed-location files that must remain where their toolchains expect them:
@@ -157,6 +189,7 @@ Centralized build-maintenance files:
 - [ ] `npm run verify:frontend`
 - [ ] `npm run verify:rust`
 - [ ] `python -m unittest discover backend/tests`
+- [ ] `build/ci/verify-security.sh`
 
 ### Gate B: App Viability
 
@@ -168,10 +201,14 @@ Centralized build-maintenance files:
 - [ ] Task handoff can include immediate read-only execution summary
 - [ ] Support incidents stay visible in the Support lane instead of the Workflow lane
 - [ ] Safe queued fixes can complete and appear under `Last auto-fix`
+- [ ] Safe queued fixes are visible in one daemon cycle and only auto-run on a later cycle
+- [ ] Support incidents can create one linked IT ticket from the Support lane
+- [ ] Support incident detail shows linked external ticket metadata
 - [ ] Task updates can be written back into conversation/session history as compact reports
 - [ ] Channel messages can resolve/create sessions and return compact replies
 - [ ] Tasks show execution domain, assigned executor, and approval scope
 - [ ] Support shows monitoring, fix queue, escalations, and history clearly
+- [ ] Support provides a split-pane incident detail view with rationale and audit trail
 - [ ] Read-only task steps auto-run and record timeline events
 - [ ] Write steps stop for approval and do not execute early
 - [ ] Tool adapters are visible through a common registry/contract
@@ -196,14 +233,18 @@ Centralized build-maintenance files:
 
 - Ubuntu: `build/checklists/ubuntu-release.md`
 - macOS: `build/checklists/macos-release.md`
+- Windows: `build/checklists/windows-release.md`
 
 ## Production Risks Still Open
 
 - privileged OS actions still need full release-grade elevation hardening
 - backend approval policy is stronger, but not yet unified across every UI mutation path
 - support auto-fix is intentionally narrow and only covers safe deterministic actions today
-- Windows backend support monitoring has a platform abstraction path, but Windows Tauri privilege/runtime work is still open
+- support is now org-ready through deployment config, but richer org policy controls are still open
+- secrets now stay in runtime/env instead of SQLite, but OS-native secure storage is still not implemented
+- Windows backend support monitoring now has a real code path and CI verification lane, but Windows packaging and broader runtime validation are still open
 - OpenClaw and Wraith are adapter contracts only; live subsystem integration is still open
+- Jira is the first ticket adapter; broader ITSM adapter coverage is still open
 - Telegram now has a webhook-ready adapter path; provider deployment and secrets management are still open
 - WhatsApp is still a session/channel contract only; provider wiring is still open
 - browser/API adapters are deferred

@@ -104,6 +104,8 @@ fn execution_path_label() -> String {
         "in-app approval + macOS administrator prompt".to_string()
     } else if cfg!(target_os = "linux") {
         "in-app approval + sudo".to_string()
+    } else if cfg!(target_os = "windows") {
+        "in-app approval + Windows UAC prompt".to_string()
     } else {
         "unsupported platform".to_string()
     }
@@ -301,7 +303,6 @@ fn plan_privileged_action(
                 return Ok(PlannedPrivilegedCommand {
                     program: "taskkill".to_string(),
                     args: vec!["/PID".to_string(), pid.to_string(), "/F".to_string()],
-                    execution_path,
                 });
             }
         }
@@ -337,6 +338,7 @@ fn classify_privileged_error(error: &str) -> &'static str {
         || lower.contains("interactive authentication required")
         || lower.contains("a password is required")
         || lower.contains("sudo:")
+        || lower.contains("requested operation requires elevation")
     {
         "insufficient_privileges"
     } else if lower.contains("invalid ") {
@@ -374,12 +376,37 @@ fn execute_with_platform_auth(command: PlannedPrivilegedCommand) -> Result<Strin
 
     #[cfg(target_os = "windows")]
     {
-        let _ = command;
-        return Err("Sensitive OS action is not supported on this platform.".to_string());
+        let script = format!(
+            "$p = Start-Process -FilePath '{}' -ArgumentList @({}) -Verb RunAs -Wait -PassThru; Write-Output $p.ExitCode",
+            escape_powershell_single_quoted(&command.program),
+            command
+                .args
+                .iter()
+                .map(|arg| format!("'{}'", escape_powershell_single_quoted(arg)))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        let result = run_command("powershell", ["-NoProfile", "-Command", script.as_str()])?;
+        let exit_code = result
+            .lines()
+            .last()
+            .unwrap_or_default()
+            .trim()
+            .parse::<i32>()
+            .map_err(|_| format!("Unexpected Windows elevation result: {result}"))?;
+        if exit_code == 0 {
+            return Ok("OK".to_string());
+        }
+        return Err(format!("Privileged Windows action exited with code {exit_code}"));
     }
 
     #[allow(unreachable_code)]
     Err("Sensitive OS action is not supported on this platform.".to_string())
+}
+
+#[cfg(target_os = "windows")]
+fn escape_powershell_single_quoted(input: &str) -> String {
+    input.replace('\'', "''")
 }
 
 #[command]

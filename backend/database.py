@@ -44,6 +44,13 @@ async def init_db():
             )
         """)
         await db.execute("""
+            CREATE TABLE IF NOT EXISTS app_config (
+                section TEXT PRIMARY KEY,
+                value_json TEXT NOT NULL DEFAULT '{}',
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        await db.execute("""
             CREATE TABLE IF NOT EXISTS tasks (
                 id TEXT PRIMARY KEY,
                 conversation_id TEXT,
@@ -59,10 +66,20 @@ async def init_db():
                 task_kind TEXT NOT NULL DEFAULT 'workflow_task',
                 support_category TEXT,
                 support_severity TEXT NOT NULL DEFAULT 'healthy',
+                support_decision_reason TEXT NOT NULL DEFAULT '',
+                support_recommended_fixes_json TEXT NOT NULL DEFAULT '[]',
+                support_source_signal TEXT NOT NULL DEFAULT '',
+                support_detected_at TEXT,
+                support_last_decision_at TEXT,
                 trigger_source TEXT NOT NULL DEFAULT 'manual',
                 auto_fix_eligible INTEGER NOT NULL DEFAULT 0,
                 auto_fix_attempted INTEGER NOT NULL DEFAULT 0,
                 auto_fix_result TEXT NOT NULL DEFAULT '',
+                external_ticket_system TEXT NOT NULL DEFAULT '',
+                external_ticket_key TEXT NOT NULL DEFAULT '',
+                external_ticket_url TEXT NOT NULL DEFAULT '',
+                external_ticket_status TEXT NOT NULL DEFAULT '',
+                external_ticket_created_at TEXT,
                 risk_level TEXT NOT NULL DEFAULT 'read',
                 next_suggested_action TEXT NOT NULL DEFAULT '',
                 status TEXT NOT NULL DEFAULT 'draft',
@@ -174,10 +191,20 @@ async def init_db():
         await _ensure_column(db, "tasks", "task_kind", "TEXT NOT NULL DEFAULT 'workflow_task'")
         await _ensure_column(db, "tasks", "support_category", "TEXT")
         await _ensure_column(db, "tasks", "support_severity", "TEXT NOT NULL DEFAULT 'healthy'")
+        await _ensure_column(db, "tasks", "support_decision_reason", "TEXT NOT NULL DEFAULT ''")
+        await _ensure_column(db, "tasks", "support_recommended_fixes_json", "TEXT NOT NULL DEFAULT '[]'")
+        await _ensure_column(db, "tasks", "support_source_signal", "TEXT NOT NULL DEFAULT ''")
+        await _ensure_column(db, "tasks", "support_detected_at", "TEXT")
+        await _ensure_column(db, "tasks", "support_last_decision_at", "TEXT")
         await _ensure_column(db, "tasks", "trigger_source", "TEXT NOT NULL DEFAULT 'manual'")
         await _ensure_column(db, "tasks", "auto_fix_eligible", "INTEGER NOT NULL DEFAULT 0")
         await _ensure_column(db, "tasks", "auto_fix_attempted", "INTEGER NOT NULL DEFAULT 0")
         await _ensure_column(db, "tasks", "auto_fix_result", "TEXT NOT NULL DEFAULT ''")
+        await _ensure_column(db, "tasks", "external_ticket_system", "TEXT NOT NULL DEFAULT ''")
+        await _ensure_column(db, "tasks", "external_ticket_key", "TEXT NOT NULL DEFAULT ''")
+        await _ensure_column(db, "tasks", "external_ticket_url", "TEXT NOT NULL DEFAULT ''")
+        await _ensure_column(db, "tasks", "external_ticket_status", "TEXT NOT NULL DEFAULT ''")
+        await _ensure_column(db, "tasks", "external_ticket_created_at", "TEXT")
         await db.commit()
 
 

@@ -1,8 +1,8 @@
 {
   "name": "oxy",
-  "version": "0.4.0",
-  "milestone": "Dedicated Local Support Lane",
-  "release_date": "2026-03-11",
+  "version": "0.5.1",
+  "milestone": "Org-Ready Support Operations + Security Baseline",
+  "release_date": "2026-03-12",
   "status": "active-development",
   "source_of_truth": [
     "build/Core_blueprint.md",

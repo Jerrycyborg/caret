@@ -1,6 +1,8 @@
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timezone
+import os
 from pathlib import Path
 
 
@@ -13,6 +15,9 @@ import aiosqlite
 import database
 from database import init_db
 from routers.channels import ChannelMessageRequest, receive_channel_message, receive_telegram_webhook
+from routers.settings import delete_key, list_keys, set_key, SetKeyBody
+from routers.support import support_create_ticket, support_incident_detail
+from services.config import get_config_section, set_config_section
 from services.executors import executor_registry_payload
 from services.orchestrator import (
     APPROVAL_SCOPE_BOUNDARY,
@@ -38,6 +43,8 @@ class BackendContractTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.tempdir = tempfile.TemporaryDirectory()
         database.DB_PATH = Path(self.tempdir.name) / "oxy-test.db"
+        os.environ.pop("OPENAI_API_KEY", None)
+        os.environ.pop("OXY_JIRA_API_TOKEN", None)
         await init_db()
 
     async def asyncTearDown(self):
@@ -206,6 +213,27 @@ class BackendContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(status["fix_queue"][0]["support_severity"], "fix_queued")
         self.assertEqual(status["escalations"][0]["support_severity"], "escalated")
 
+    async def test_support_queue_then_auto_run_happens_next_cycle(self):
+        cycle_started_at = datetime.now(timezone.utc).isoformat()
+        await _persist_support_issues(
+            [
+                SupportIssue(
+                    key="meeting_app_pressure",
+                    category="meetings",
+                    severity="action_required",
+                    title="Meeting app pressure",
+                    summary="Meeting app is under load.",
+                    prompt="Capture diagnostics before the next meeting.",
+                    recommended_fixes=["capture diagnostics"],
+                    auto_fix_kind="capture_diagnostics",
+                )
+            ]
+        )
+        status = await support_daemon_status()
+        self.assertEqual(status["summary"]["queued_fix_count"], 1)
+        self.assertEqual(await process_support_fix_queue(cycle_started_at=cycle_started_at), 0)
+        self.assertEqual(await process_support_fix_queue(), 1)
+
     async def test_support_fix_runner_completes_safe_fix(self):
         task = await create_task(
             "Review disk pressure and cleanup candidates.",
@@ -218,7 +246,20 @@ class BackendContractTests(unittest.IsolatedAsyncioTestCase):
                 "auto_fix_attempted": False,
             },
         )
-        applied = await run_support_fix(task["task"]["id"])
+        with patch(
+            "services.support_daemon.collect_support_snapshot",
+            return_value=SupportSnapshot(
+                disk_used_pct=55.0,
+                cpu_load_pct=20.0,
+                teams_cpu_pct=4.0,
+                active_connections=40,
+                mem_used_pct=35.0,
+                camera_ready=True,
+                printer_ready=True,
+                background_heavy_count=0,
+            ),
+        ):
+            applied = await run_support_fix(task["task"]["id"])
         self.assertTrue(applied)
         refreshed = await get_task(task["task"]["id"])
         self.assertEqual(refreshed["task"]["support_severity"], "fixed")
@@ -254,3 +295,108 @@ class BackendContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(escalated)
         refreshed = await get_task(task["task"]["id"])
         self.assertEqual(refreshed["task"]["support_severity"], "escalated")
+
+    async def test_support_incident_detail_includes_audit_fields(self):
+        task = await create_task(
+            "Review disk pressure and cleanup candidates.",
+            task_context={
+                "task_kind": "support_incident",
+                "support_category": "disk",
+                "support_severity": "fix_queued",
+                "support_decision_reason": "Queued for a safe cleanup-candidate pass.",
+                "support_recommended_fixes": ["review temp files", "review downloads"],
+                "support_source_signal": "disk_pressure",
+                "support_detected_at": datetime.now(timezone.utc).isoformat(),
+                "support_last_decision_at": datetime.now(timezone.utc).isoformat(),
+                "trigger_source": "watcher",
+                "auto_fix_eligible": True,
+            },
+        )
+        detail = await support_incident_detail(task["task"]["id"])
+        self.assertEqual(detail["incident"]["source_signal"], "disk_pressure")
+        self.assertEqual(detail["incident"]["decision_kind"], "fix_queued")
+        self.assertEqual(detail["incident"]["recommended_fixes"], ["review temp files", "review downloads"])
+
+    async def test_settings_config_roundtrip_preserves_ticket_secret_when_blank(self):
+        await set_config_section(
+            "ticketing",
+            {
+                "adapter_type": "jira",
+                "jira_base_url": "https://jira.example.com",
+                "jira_project_key": "IT",
+                "jira_issue_type": "Task",
+                "jira_user_email": "ops@example.com",
+                "jira_api_token": "secret-token",
+                "jira_default_labels": ["oxy"],
+                "jira_default_components": [],
+            },
+        )
+        await set_config_section(
+            "ticketing",
+            {
+                "adapter_type": "jira",
+                "jira_base_url": "https://jira.example.com",
+                "jira_project_key": "IT",
+                "jira_issue_type": "Task",
+                "jira_user_email": "ops@example.com",
+                "jira_api_token": "",
+                "jira_default_labels": ["oxy", "support"],
+                "jira_default_components": [],
+            },
+        )
+        ticketing = await get_config_section("ticketing")
+        self.assertEqual(ticketing["jira_api_token"], "secret-token")
+        self.assertEqual(ticketing["jira_default_labels"], ["oxy", "support"])
+
+    async def test_provider_keys_are_runtime_only(self):
+        await set_key("openai", SetKeyBody(value="sk-test-secret"))
+        listed = await list_keys()
+        self.assertEqual(listed["keys"][0]["provider"], "openai")
+        self.assertEqual(os.environ.get("OPENAI_API_KEY"), "sk-test-secret")
+        async with aiosqlite.connect(database.get_db_path()) as db:
+            async with db.execute("SELECT COUNT(*) FROM api_keys") as cur:
+                row = await cur.fetchone()
+        self.assertEqual(row[0], 0)
+        await delete_key("openai")
+
+    async def test_support_ticket_creation_links_incident(self):
+        await set_config_section(
+            "ticketing",
+            {
+                "adapter_type": "jira",
+                "jira_base_url": "https://jira.example.com",
+                "jira_project_key": "IT",
+                "jira_issue_type": "Task",
+                "jira_user_email": "ops@example.com",
+                "jira_api_token": "secret-token",
+                "jira_default_labels": ["oxy"],
+                "jira_default_components": ["IT Support"],
+            },
+        )
+        task = await create_task(
+            "Printer issue needs escalation.",
+            task_context={
+                "task_kind": "support_incident",
+                "support_category": "printer_network",
+                "support_severity": "escalated",
+                "support_decision_reason": "Printer readiness is still degraded.",
+                "support_source_signal": "printer_network_readiness",
+                "trigger_source": "manual",
+            },
+        )
+
+        async def fake_create_issue(_config, _payload):
+            return {"id": "10001", "key": "IT-42"}
+
+        async def fake_attach(_config, _ticket_id, _incident_detail):
+            return 1
+
+        with patch("services.ticketing._jira_create_issue", side_effect=fake_create_issue), patch(
+            "services.ticketing._attach_support_artifacts", side_effect=fake_attach
+        ):
+            response = await support_create_ticket(task["task"]["id"])
+
+        self.assertEqual(response["ticket"]["ticket_key"], "IT-42")
+        detail = response["detail"]
+        self.assertEqual(detail["task"]["external_ticket_key"], "IT-42")
+        self.assertEqual(detail["task"]["external_ticket_system"], "jira")

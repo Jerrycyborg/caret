@@ -36,6 +36,11 @@ where
     }
 }
 
+#[cfg(target_os = "windows")]
+fn run_powershell(script: &str) -> Result<String, String> {
+    run_command("powershell", ["-NoProfile", "-Command", script])
+}
+
 fn command_exists(program: &str) -> bool {
     Command::new(program).arg("--version").output().is_ok()
 }
@@ -242,9 +247,8 @@ fn get_services() -> Result<String, String> {
         ["list-units", "--type=service", "--state=running"],
     );
     #[cfg(target_os = "windows")]
-    return run_command(
-        "powershell",
-        ["Get-Service", "|", "Where-Object", "{$_.Status -eq 'Running'}"],
+    return run_powershell(
+        "Get-Service | Where-Object {$_.Status -eq 'Running'} | Select-Object Status,Name,DisplayName | Format-Table -AutoSize",
     );
 
     #[allow(unreachable_code)]
@@ -271,7 +275,7 @@ fn get_audit_log() -> Result<String, String> {
     #[cfg(target_os = "linux")]
     return run_command("journalctl", ["-n", "100", "--no-pager"]);
     #[cfg(target_os = "windows")]
-    return run_command("powershell", ["Get-EventLog", "-LogName", "System", "-Newest", "100"]);
+    return run_powershell("Get-EventLog -LogName System -Newest 100 | Format-Table -AutoSize");
 
     #[allow(unreachable_code)]
     Err("Audit log access is not supported on this platform.".to_string())
@@ -294,7 +298,6 @@ fn get_network_connections() -> Result<String, String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![
             get_system_info,

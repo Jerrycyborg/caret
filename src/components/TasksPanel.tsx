@@ -259,7 +259,7 @@ export default function TasksPanel({ initialTaskId = null }: TasksPanelProps) {
       <div className="tasks-header">
         <div>
           <h2>Workflows</h2>
-          <div className="tasks-subtitle">Repo, executor, and delegated work outside the local support lane.</div>
+          <div className="tasks-subtitle">Supervised non-support work: repo/dev tasks, delegated OpenClaw work, delegated Wraith work, and future operator jobs outside Support.</div>
         </div>
       </div>
 

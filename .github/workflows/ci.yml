@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v3
       - name: Set up Node.js
@@ -47,6 +47,8 @@ jobs:
         run: ./build/ci/verify-frontend.sh
       - name: Verify Rust
         run: ./build/ci/verify-rust.sh
+      - name: Verify security baseline
+        run: ./build/ci/verify-security.sh
   package-ubuntu:
     name: Package Ubuntu
     runs-on: ubuntu-latest
