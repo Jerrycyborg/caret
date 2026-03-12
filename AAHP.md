@@ -63,12 +63,18 @@ Ownership:
 - Terminal is no longer a primary product tab; Support now owns local device incidents while Workflows owns repo/executor tasks
 - Device Support is explicitly local-first and can monitor or triage issues without any LLM attached
 - backend now runs a support daemon/watcher with deterministic checks, cooldown-based dedupe, support severity states, and safe auto-fix queueing
+- queued safe fixes can now be executed automatically by the daemon or manually from the Support UI
+- support incidents now expose explicit actions:
+  - run safe fix
+  - escalate
+- `last auto-fix` can now show real completed safe remediations
 - Support now renders:
   - `Now`
   - `Monitoring`
   - `Fix Queue`
   - `Escalations`
   - `History`
+- support platform checks are now isolated behind a platform helper so Windows support has a defined code path
 - Workflows now filters to non-support tasks so git/repo adapters stop dominating the local-support lane
 - Settings now covers provider connections, integrations, approval policy, and runtime preferences instead of only model connectors
 - agent roles are supervised metadata only:
@@ -89,6 +95,7 @@ Ownership:
 - privileged local actions stay in Rust
 - Telegram now has a webhook-ready adapter path plus Oxy-side reporting, but bot deployment/secrets are still open
 - WhatsApp is still a session/channel contract right now, not a full provider integration
+- Windows is now partially prepared at the backend support-monitoring layer, but the Tauri/Rust privilege and machine-control layer is still not Windows-ready
 - browser/API adapters are still deferred
 - hardware/model routing is still deferred
 - no autonomous multi-agent runtime yet

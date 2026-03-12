@@ -1658,6 +1658,26 @@ body {
   font-size: 12px;
 }
 
+.support-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.support-action-button {
+  border: 1px solid var(--border);
+  background: rgba(34, 197, 94, 0.12);
+  color: var(--text-primary);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.support-action-button.secondary {
+  background: var(--bg-surface);
+}
+
 /* ===== SECURITY PANEL ===== */
 .security-panel {
   height: 100%;

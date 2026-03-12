@@ -44,6 +44,7 @@ type SupportStatus = {
     background_heavy_count: number;
   } | null;
   summary: {
+    platform: string;
     watcher_status: string;
     monitoring_count: number;
     queued_fix_count: number;
@@ -60,6 +61,7 @@ type SupportStatus = {
 export default function Support({ onOpenWorkflows }: { onOpenWorkflows: () => void }) {
   const [status, setStatus] = useState<SupportStatus | null>(null);
   const [error, setError] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = async () => {
     const res = await fetch(`${BACKEND_URL}/v1/support/status`);
@@ -91,6 +93,21 @@ export default function Support({ onOpenWorkflows }: { onOpenWorkflows: () => vo
 
   const severityLabel = (value: string) => value.replace("_", " ");
 
+  const actOnIncident = async (taskId: string, action: "run-fix" | "escalate") => {
+    setBusyId(taskId);
+    setError("");
+    try {
+      const res = await fetch(`${BACKEND_URL}/v1/support/incidents/${taskId}/${action}`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail ?? "Support action failed.");
+      setStatus(data);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const renderIncident = (incident: SupportIncident) => (
     <div key={incident.id} className="support-card">
       <div className="support-card-top">
@@ -103,6 +120,21 @@ export default function Support({ onOpenWorkflows }: { onOpenWorkflows: () => vo
       </div>
       {incident.auto_fix_result && <div className="support-note">Auto-fix: {incident.auto_fix_result}</div>}
       <div className="support-line">Next: {incident.next_suggested_action}</div>
+      <div className="support-actions">
+        {incident.support_severity === "fix_queued" && (
+          <button className="support-action-button" disabled={busyId === incident.id} onClick={() => actOnIncident(incident.id, "run-fix")}>
+            {busyId === incident.id ? "Running…" : "Run safe fix"}
+          </button>
+        )}
+        {["action_required", "blocked", "escalated"].includes(incident.support_severity) && (
+          <button className="support-action-button secondary" disabled={busyId === incident.id} onClick={() => actOnIncident(incident.id, "escalate")}>
+            {busyId === incident.id ? "Working…" : "Escalate"}
+          </button>
+        )}
+        <button className="support-action-button secondary" onClick={onOpenWorkflows}>
+          Open workflows
+        </button>
+      </div>
     </div>
   );
 
@@ -120,6 +152,7 @@ export default function Support({ onOpenWorkflows }: { onOpenWorkflows: () => vo
 
       <div className="support-banner">
         <strong>Watcher:</strong> {watcherLabel}
+        {status?.summary.platform ? ` · ${status.summary.platform}` : ""}
         {status?.last_run_at ? ` · last run ${new Date(status.last_run_at).toLocaleString()}` : ""}
         {status?.next_run_at ? ` · next run ${new Date(status.next_run_at).toLocaleTimeString()}` : ""}
         {status?.last_error ? ` · error: ${status.last_error}` : ""}

@@ -74,6 +74,9 @@ V1 ships as an internal-only operator shell for power users on macOS and Ubuntu.
   - `Support` for local incidents, fix queue, escalations, and history
   - `Workflows` for repo/dev, OpenClaw, and Wraith execution
 - local support daemon that can watch device-health thresholds and auto-create supervised support incidents
+- support incident actions:
+  - run safe fix
+  - escalate
 - support incident metadata on the shared task engine:
   - `task_kind`
   - `support_category`
@@ -83,6 +86,7 @@ V1 ships as an internal-only operator shell for power users on macOS and Ubuntu.
   - `auto_fix_attempted`
   - `auto_fix_result`
 - safe auto-fix allowlist for non-privileged local remediation only
+- platform helper layer for support monitoring so Windows can be added without rewriting the watcher contract
 
 ### Non-Goals for V1
 
@@ -163,6 +167,7 @@ Centralized build-maintenance files:
 - [ ] Action-oriented chat can emit a task handoff
 - [ ] Task handoff can include immediate read-only execution summary
 - [ ] Support incidents stay visible in the Support lane instead of the Workflow lane
+- [ ] Safe queued fixes can complete and appear under `Last auto-fix`
 - [ ] Task updates can be written back into conversation/session history as compact reports
 - [ ] Channel messages can resolve/create sessions and return compact replies
 - [ ] Tasks show execution domain, assigned executor, and approval scope
@@ -197,6 +202,7 @@ Centralized build-maintenance files:
 - privileged OS actions still need full release-grade elevation hardening
 - backend approval policy is stronger, but not yet unified across every UI mutation path
 - support auto-fix is intentionally narrow and only covers safe deterministic actions today
+- Windows backend support monitoring has a platform abstraction path, but Windows Tauri privilege/runtime work is still open
 - OpenClaw and Wraith are adapter contracts only; live subsystem integration is still open
 - Telegram now has a webhook-ready adapter path; provider deployment and secrets management are still open
 - WhatsApp is still a session/channel contract only; provider wiring is still open

@@ -30,6 +30,7 @@ from services.orchestrator import (
     resolve_approval,
 )
 from services.support_daemon import SupportIssue, SupportSnapshot, _persist_support_issues, evaluate_support_snapshot, support_daemon_status
+from services.support_daemon import process_support_fix_queue, run_support_fix, escalate_support_incident
 from unittest.mock import patch
 
 
@@ -204,3 +205,52 @@ class BackendContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(status["summary"]["escalation_count"], 1)
         self.assertEqual(status["fix_queue"][0]["support_severity"], "fix_queued")
         self.assertEqual(status["escalations"][0]["support_severity"], "escalated")
+
+    async def test_support_fix_runner_completes_safe_fix(self):
+        task = await create_task(
+            "Review disk pressure and cleanup candidates.",
+            task_context={
+                "task_kind": "support_incident",
+                "support_category": "disk",
+                "support_severity": "fix_queued",
+                "trigger_source": "watcher",
+                "auto_fix_eligible": True,
+                "auto_fix_attempted": False,
+            },
+        )
+        applied = await run_support_fix(task["task"]["id"])
+        self.assertTrue(applied)
+        refreshed = await get_task(task["task"]["id"])
+        self.assertEqual(refreshed["task"]["support_severity"], "fixed")
+        self.assertTrue(refreshed["task"]["auto_fix_attempted"])
+        self.assertIn("cleanup", refreshed["task"]["auto_fix_result"].lower())
+
+    async def test_process_fix_queue_advances_queued_incidents(self):
+        await create_task(
+            "Capture diagnostics before the machine slows down.",
+            task_context={
+                "task_kind": "support_incident",
+                "support_category": "performance",
+                "support_severity": "fix_queued",
+                "trigger_source": "watcher",
+                "auto_fix_eligible": True,
+            },
+        )
+        applied = await process_support_fix_queue()
+        self.assertEqual(applied, 1)
+
+    async def test_support_escalation_updates_incident(self):
+        task = await create_task(
+            "Inspect startup load and prepare remediation.",
+            task_context={
+                "task_kind": "support_incident",
+                "support_category": "startup_services",
+                "support_severity": "action_required",
+                "trigger_source": "manual",
+                "auto_fix_eligible": False,
+            },
+        )
+        escalated = await escalate_support_incident(task["task"]["id"])
+        self.assertTrue(escalated)
+        refreshed = await get_task(task["task"]["id"])
+        self.assertEqual(refreshed["task"]["support_severity"], "escalated")

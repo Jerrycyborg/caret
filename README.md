@@ -93,6 +93,7 @@ Core rule:
   - `blocked`
   - `escalated`
 - safe auto-fix queue for non-privileged remediation only
+- queued safe fixes can now complete automatically or be run manually from Support
 - support history, escalations, and queued fixes in a dedicated Support view
 
 ### Workflow Lane
@@ -214,6 +215,7 @@ Still deferred:
 - live OpenClaw integration
 - live Wraith integration
 - real Telegram/WhatsApp provider wiring
+- Windows Tauri privilege/runtime parity
 - browser/API adapters
 - plugin sandbox
 - hardware/model routing

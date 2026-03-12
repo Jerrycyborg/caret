@@ -4,7 +4,6 @@ import asyncio
 import json
 import os
 import shutil
-import subprocess
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -19,6 +18,14 @@ from services.orchestrator import (
     TASK_STATUS_REJECTED,
     create_task,
 )
+from services.support_platform import (
+    allowlisted_cleanup_targets,
+    collect_cpu_load_pct,
+    collect_memory_used_pct,
+    count_active_connections,
+    read_processes,
+    support_platform_id,
+)
 
 CHECK_INTERVAL_SECONDS = int(os.environ.get("OXY_SUPPORT_DAEMON_INTERVAL", "300"))
 TRIGGER_COOLDOWN_MINUTES = int(os.environ.get("OXY_SUPPORT_DAEMON_COOLDOWN_MINUTES", "360"))
@@ -31,6 +38,7 @@ _daemon_state: dict[str, Any] = {
     "last_error": "",
     "last_snapshot": None,
     "last_issues": [],
+    "platform": support_platform_id(),
 }
 
 
@@ -142,6 +150,7 @@ async def support_daemon_status() -> dict[str, Any]:
     return {
         **_daemon_state,
         "summary": {
+            "platform": support_platform_id(),
             "watcher_status": watcher_status,
             "monitoring_count": len(monitoring),
             "queued_fix_count": len(fix_queue),
@@ -159,20 +168,15 @@ async def support_daemon_status() -> dict[str, Any]:
 def collect_support_snapshot() -> SupportSnapshot:
     home_usage = shutil.disk_usage(Path.home())
     disk_used_pct = ((home_usage.total - home_usage.free) / home_usage.total * 100.0) if home_usage.total else 0.0
-    cpu_count = os.cpu_count() or 1
-    try:
-        load_avg = os.getloadavg()[0]
-        cpu_load_pct = min(100.0, (load_avg / cpu_count) * 100.0)
-    except (AttributeError, OSError):
-        cpu_load_pct = 0.0
-    mem_used_pct = _memory_used_pct()
-    processes = _read_processes()
+    cpu_load_pct = collect_cpu_load_pct()
+    mem_used_pct = collect_memory_used_pct()
+    processes = read_processes()
     process_names = [process["name"].lower() for process in processes]
     teams_cpu_pct = max((process["cpu_pct"] for process in processes if "teams" in process["name"].lower()), default=0.0)
     background_heavy_count = sum(1 for process in processes if process["cpu_pct"] >= 15)
     camera_ready = any(token in name for name in process_names for token in ("camera", "avfoundation", "coreaudiod", "pipewire", "wireplumber"))
     printer_ready = any(token in name for name in process_names for token in ("cups", "printer", "print"))
-    active_connections = _count_active_connections()
+    active_connections = count_active_connections()
     return SupportSnapshot(
         disk_used_pct=round(disk_used_pct, 2),
         cpu_load_pct=round(cpu_load_pct, 2),
@@ -335,6 +339,7 @@ async def run_support_daemon(stop_event: asyncio.Event) -> None:
             _daemon_state["last_issues"] = [asdict(issue) for issue in issues]
             _daemon_state["last_error"] = ""
             await _persist_support_issues(issues)
+            await process_support_fix_queue()
         except Exception as exc:
             _daemon_state["last_error"] = str(exc)
         try:
@@ -451,6 +456,100 @@ async def _ensure_support_task(issue: SupportIssue, existing: dict[str, Any] | N
     return task["task"]["id"], support_severity
 
 
+async def process_support_fix_queue() -> int:
+    async with aiosqlite.connect(get_db_path()) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """
+            SELECT *
+            FROM tasks
+            WHERE task_kind = 'support_incident'
+              AND support_severity = 'fix_queued'
+              AND auto_fix_eligible = 1
+            ORDER BY updated_at ASC
+            LIMIT 10
+            """
+        ) as cur:
+            tasks = [dict(row) for row in await cur.fetchall()]
+    applied = 0
+    for task in tasks:
+        if await run_support_fix(task["id"]):
+            applied += 1
+    return applied
+
+
+async def run_support_fix(task_id: str) -> bool:
+    task = await _fetch_task(task_id)
+    if not task or task.get("task_kind") != "support_incident" or not task.get("auto_fix_eligible"):
+        return False
+
+    result: dict[str, str]
+    category = task.get("support_category") or ""
+    if category == "disk":
+        result = _apply_cleanup_candidate_fix()
+    elif category in {"performance", "meetings"}:
+        result = _apply_diagnostic_fix()
+    else:
+        result = {
+            "support_severity": "blocked",
+            "auto_fix_result": "No safe automatic remediation is allowlisted for this category. Manual review is required.",
+            "next_suggested_action": "Review the incident and decide whether to escalate or create a supervised workflow.",
+            "event_type": "support_fix_blocked",
+            "event_message": "Safe auto-fix is not available for this incident.",
+        }
+
+    async with aiosqlite.connect(get_db_path()) as db:
+        await db.execute(
+            """
+            UPDATE tasks
+            SET support_severity = ?, auto_fix_attempted = 1, auto_fix_result = ?,
+                next_suggested_action = ?, updated_at = datetime('now')
+            WHERE id = ?
+            """,
+            (
+                result["support_severity"],
+                result["auto_fix_result"],
+                result["next_suggested_action"],
+                task_id,
+            ),
+        )
+        await _insert_policy_event(
+            db,
+            task_id,
+            result["event_type"],
+            result["event_message"],
+            {"support_category": category, "platform": support_platform_id()},
+        )
+        await db.commit()
+    return True
+
+
+async def escalate_support_incident(task_id: str) -> bool:
+    task = await _fetch_task(task_id)
+    if not task or task.get("task_kind") != "support_incident":
+        return False
+    async with aiosqlite.connect(get_db_path()) as db:
+        await db.execute(
+            """
+            UPDATE tasks
+            SET support_severity = 'escalated',
+                next_suggested_action = ?,
+                updated_at = datetime('now')
+            WHERE id = ?
+            """,
+            ("Escalated. Review the incident in Support and use Security or Workflows for supervised follow-up.", task_id),
+        )
+        await _insert_policy_event(
+            db,
+            task_id,
+            "support_escalated",
+            "Support incident escalated for manual or privileged follow-up.",
+            {"platform": support_platform_id()},
+        )
+        await db.commit()
+    return True
+
+
 def _auto_fix_for_issue(issue: SupportIssue) -> dict[str, str] | None:
     if issue.auto_fix_kind == "queue_cleanup_candidates":
         return {
@@ -475,6 +574,22 @@ async def _fetch_task(task_id: str | None) -> dict[str, Any] | None:
     return dict(row) if row else None
 
 
+async def _insert_policy_event(
+    db: aiosqlite.Connection,
+    task_id: str,
+    event_type: str,
+    message: str,
+    metadata: dict[str, Any],
+) -> None:
+    await db.execute(
+        """
+        INSERT INTO policy_events (id, task_id, step_id, event_type, message, metadata_json)
+        VALUES (hex(randomblob(16)), ?, NULL, ?, ?, ?)
+        """,
+        (task_id, event_type, message, json.dumps(metadata)),
+    )
+
+
 def _task_to_support_incident(task: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": task["id"],
@@ -494,6 +609,55 @@ def _task_to_support_incident(task: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _apply_cleanup_candidate_fix() -> dict[str, str]:
+    targets = allowlisted_cleanup_targets()
+    summaries = []
+    for path in targets[:4]:
+        size_bytes = _safe_directory_size(path)
+        summaries.append(f"{path.name}: {round(size_bytes / (1024 * 1024), 1)} MB")
+    detail = "Prepared safe cleanup candidates in allowlisted locations."
+    if summaries:
+        detail += " " + " | ".join(summaries)
+    return {
+        "support_severity": "fixed",
+        "auto_fix_result": detail,
+        "next_suggested_action": "Review cleanup candidates and keep monitoring disk pressure.",
+        "event_type": "support_fix_applied",
+        "event_message": "Prepared cleanup candidates for allowlisted temp/cache paths.",
+    }
+
+
+def _apply_diagnostic_fix() -> dict[str, str]:
+    processes = read_processes()
+    heaviest = sorted(processes, key=lambda item: item.get("rss_kb", 0), reverse=True)[:3]
+    summary = ", ".join(f"{proc['name']} ({round(proc['rss_kb'] / 1024, 1)} MB)" for proc in heaviest) if heaviest else "no process details captured"
+    return {
+        "support_severity": "fixed",
+        "auto_fix_result": f"Captured local diagnostics and refreshed the support record. Top processes: {summary}.",
+        "next_suggested_action": "Review the captured diagnostics and continue monitoring for recurrence.",
+        "event_type": "support_fix_applied",
+        "event_message": "Captured local diagnostics for safe remediation.",
+    }
+
+
+def _safe_directory_size(path: Path) -> int:
+    total = 0
+    try:
+        if not path.exists() or not path.is_dir():
+            return 0
+        for item in path.iterdir():
+            try:
+                if item.is_file():
+                    total += item.stat().st_size
+                elif item.is_dir():
+                    total += sum(child.stat().st_size for child in item.rglob("*") if child.is_file())
+            except Exception:
+                continue
+    except Exception:
+        return 0
+    return total
+
+
 def _should_trigger_again(last_triggered_at: str | None) -> bool:
     if not last_triggered_at:
         return True
@@ -509,74 +673,3 @@ async def _ensure_column(db: aiosqlite.Connection, table: str, column: str, defi
         existing = {row[1] for row in await cur.fetchall()}
     if column not in existing:
         await db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
-
-
-def _memory_used_pct() -> float:
-    try:
-        if shutil.which("vm_stat"):
-            result = subprocess.run(["vm_stat"], capture_output=True, text=True, check=True)
-            pages = {}
-            page_size = 4096
-            for line in result.stdout.splitlines():
-                if "page size of" in line:
-                    try:
-                        page_size = int(line.split("page size of", 1)[1].split("bytes", 1)[0].strip())
-                    except Exception:
-                        page_size = 4096
-                if ":" not in line:
-                    continue
-                key, value = line.split(":", 1)
-                value = value.strip().rstrip(".").replace(".", "")
-                if value.isdigit():
-                    pages[key.strip()] = int(value)
-            active = pages.get("Pages active", 0) + pages.get("Pages wired down", 0) + pages.get("Pages occupied by compressor", 0)
-            free = pages.get("Pages free", 0) + pages.get("Pages speculative", 0)
-            total = active + free + pages.get("Pages inactive", 0)
-            if total > 0:
-                return active / total * 100.0
-        if shutil.which("free"):
-            result = subprocess.run(["free", "-m"], capture_output=True, text=True, check=True)
-            for line in result.stdout.splitlines():
-                if line.lower().startswith("mem:"):
-                    parts = line.split()
-                    total = float(parts[1])
-                    used = float(parts[2])
-                    if total > 0:
-                        return used / total * 100.0
-    except Exception:
-        return 0.0
-    return 0.0
-
-
-def _read_processes() -> list[dict[str, Any]]:
-    if os.name == "nt":
-        return []
-    try:
-        result = subprocess.run(["ps", "-Ao", "comm=,%cpu=,rss="], capture_output=True, text=True, check=True)
-    except Exception:
-        return []
-    processes = []
-    for line in result.stdout.splitlines():
-        parts = line.strip().split(None, 2)
-        if len(parts) != 3:
-            continue
-        name, cpu_raw, rss_raw = parts
-        try:
-            processes.append({"name": name, "cpu_pct": float(cpu_raw), "rss_kb": int(rss_raw)})
-        except ValueError:
-            continue
-    return processes
-
-
-def _count_active_connections() -> int:
-    if os.name == "nt":
-        command = ["netstat", "-an"]
-    elif Path("/usr/sbin/ss").exists() or Path("/bin/ss").exists() or shutil.which("ss"):
-        command = ["ss", "-tan"]
-    else:
-        command = ["netstat", "-an"]
-    try:
-        result = subprocess.run(command, capture_output=True, text=True, check=True)
-    except Exception:
-        return 0
-    return sum(1 for line in result.stdout.splitlines() if line.strip() and ("ESTAB" in line or "ESTABLISHED" in line))
