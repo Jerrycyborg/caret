@@ -118,6 +118,8 @@ Ownership:
 - Telegram now has a webhook-ready adapter path plus Oxy-side reporting, but bot deployment/secrets are still open
 - WhatsApp is still a session/channel contract right now, not a full provider integration
 - Windows now has backend support-monitoring coverage, fixed read-only command paths, a UAC-backed privileged execution path, and a CI verification lane, but broad runtime validation and packaging proof are still open
+- Windows now also has a local MSI bootstrap script at `build/windows/install-from-git.ps1` so a git checkout can be installed and launched with one PowerShell command
+- Windows packaging now targets a normal installed-app flow: MSI + setup EXE from GitHub Releases with a bundled backend sidecar EXE that Tauri launches automatically
 - browser/API adapters are still deferred
 - hardware/model routing is still deferred
 - no autonomous multi-agent runtime yet
@@ -134,6 +136,6 @@ On resume:
 ## Next Recommended Focus
 
 1. prove Jira ticket creation against a real deployment config
-2. validate the Windows lane on a real Windows device or runner artifact
+2. validate the packaged Windows lane on a real Windows device or runner artifact
 3. broaden support auto-fix carefully while keeping it allowlist-only
 4. then wire OpenClaw and Wraith integrations behind the executor adapter contract

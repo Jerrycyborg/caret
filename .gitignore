@@ -26,6 +26,8 @@ dist-ssr
 # Tauri
 src-tauri/target/
 src-tauri/gen/
+src-tauri/resources/windows/oxy-backend.exe
+src-tauri/resources/windows/oxy-backend.manifest
 
 # Python
 __pycache__/
@@ -37,6 +39,9 @@ backend/venv/
 backend/db/
 backend/data/
 backend/.env
+build/windows/pyinstaller-build/
+build/windows/pyinstaller-dist/
+build/windows/pyinstaller-spec/
 
 # Env
 .env

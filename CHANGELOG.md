@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.0 - 2026-03-12
+
+- added Windows backend sidecar packaging via a PyInstaller-built backend EXE
+- added Windows CI packaging for MSI and setup EXE artifacts
+- added GitHub Release publishing for Windows installer assets on version tags
+- wired the packaged Windows app to auto-start and stop its bundled backend sidecar
+
+## 0.5.2 - 2026-03-12
+
+- added a Windows MSI bootstrap installer path from the git checkout via `build/windows/install-from-git.ps1`
+- added npm helpers for Windows package and install flow
+- updated the Windows release checklist and build blueprint to track the bootstrap packaging path
+
 ## 0.5.1 - 2026-03-12
 
 - moved provider secrets and Jira token handling to runtime/env-only instead of SQLite persistence

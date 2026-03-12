@@ -160,6 +160,35 @@ The repo is moving toward a local-first operator hub where:
 npm install
 ```
 
+### Windows One-Command Install From Git
+
+From PowerShell on Windows, run:
+
+```powershell
+git clone <your-oxy-repo-url> "$env:LOCALAPPDATA\Oxy\src"; Set-Location "$env:LOCALAPPDATA\Oxy\src"; powershell -ExecutionPolicy Bypass -File .\build\windows\install-from-git.ps1
+```
+
+What it does:
+
+- installs missing prerequisites with `winget` if needed
+- creates `.env` from `.env.example` if missing
+- builds the Windows MSI locally
+- installs Oxy
+- launches the installed app
+
+### Windows Normal Install
+
+For normal Windows use, install Oxy from GitHub Releases:
+
+- download the `.msi` for managed or enterprise deployment
+- download the setup `.exe` for direct user install
+
+The Windows package now includes:
+
+- the Tauri desktop shell
+- a bundled backend sidecar EXE that starts automatically with Oxy
+- no required Python install on the target machine
+
 ### Run Backend
 
 ```sh
@@ -232,7 +261,7 @@ Still deferred:
 - live OpenClaw integration
 - live Wraith integration
 - real Telegram/WhatsApp provider wiring
-- full Windows packaging and field validation
+- broader Windows field validation and signing after the packaged sidecar release path
 - browser/API adapters
 - plugin sandbox
 - hardware/model routing

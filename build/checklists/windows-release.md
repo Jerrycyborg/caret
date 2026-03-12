@@ -13,6 +13,11 @@ Ship a Windows desktop build that verifies on Windows, handles local support mon
 
 ## Local Validation
 
+- [ ] `build/windows/install-from-git.ps1` installs prerequisites or fails clearly
+- [ ] `build/windows/install-from-git.ps1` builds an MSI and installs Oxy locally
+- [ ] installed Oxy launches after bootstrap
+- [ ] packaged Oxy launches its bundled backend automatically
+- [ ] packaged Oxy works without Python installed on the target machine
 - [ ] App launches on supported Windows version
 - [ ] Backend launches locally
 - [ ] Chat round-trip works
@@ -27,5 +32,6 @@ Ship a Windows desktop build that verifies on Windows, handles local support mon
 ## Release Notes
 
 - [ ] Target Windows version is recorded
+- [ ] GitHub Release includes MSI + setup EXE + checksum file
 - [ ] Installer artifact is archived
 - [ ] Known Windows limitations are documented

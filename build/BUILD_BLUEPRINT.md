@@ -157,6 +157,9 @@ Proves the codebase verifies on Windows and documents the remaining UAC/runtime 
 - run frontend verification on Windows
 - run Rust verification on Windows
 - run security verification on Windows
+- build a bundled backend sidecar EXE for Windows packaging
+- produce MSI and setup EXE artifacts on Windows CI
+- publish Windows release artifacts to GitHub Releases on version tags
 - complete the Windows release checklist before claiming Windows support
 
 ## Build Structure
@@ -243,6 +246,7 @@ Centralized build-maintenance files:
 - support is now org-ready through deployment config, but richer org policy controls are still open
 - secrets now stay in runtime/env instead of SQLite, but OS-native secure storage is still not implemented
 - Windows backend support monitoring now has a real code path and CI verification lane, but Windows packaging and broader runtime validation are still open
+- Windows packaging now uses a bundled backend sidecar EXE and release artifacts, but signing and real-device validation are still open
 - OpenClaw and Wraith are adapter contracts only; live subsystem integration is still open
 - Jira is the first ticket adapter; broader ITSM adapter coverage is still open
 - Telegram now has a webhook-ready adapter path; provider deployment and secrets management are still open

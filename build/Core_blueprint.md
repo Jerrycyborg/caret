@@ -131,6 +131,15 @@ Org-ready support operations:
 - Jira as the first ticket adapter behind Oxy
 - org-ready single-tenant deployment model without multi-tenant redesign
 
+### Milestone 6
+
+Windows direct-install packaging:
+
+- packaged MSI and setup EXE artifacts
+- bundled backend sidecar EXE
+- GitHub Releases as the primary Windows delivery path
+- installed-app flow instead of source-run as the default Windows experience
+
 ### Deferred
 
 - browser/API adapters

@@ -8,6 +8,15 @@ use std::ffi::OsStr;
 use std::process::Command;
 use tools::{execute_tool_adapter, list_tool_adapters};
 
+#[cfg(target_os = "windows")]
+use std::process::{Child, Stdio};
+#[cfg(target_os = "windows")]
+use std::sync::Mutex;
+#[cfg(target_os = "windows")]
+use std::time::Duration;
+#[cfg(target_os = "windows")]
+use tauri::{Manager, RunEvent};
+
 fn run_command<I, S>(program: &str, args: I) -> Result<String, String>
 where
     I: IntoIterator<Item = S>,
@@ -43,6 +52,62 @@ fn run_powershell(script: &str) -> Result<String, String> {
 
 fn command_exists(program: &str) -> bool {
     Command::new(program).arg("--version").output().is_ok()
+}
+
+#[cfg(target_os = "windows")]
+struct BackendSidecarState(Mutex<Option<Child>>);
+
+#[cfg(target_os = "windows")]
+fn backend_port_open() -> bool {
+    std::net::TcpStream::connect_timeout(
+        &"127.0.0.1:8000".parse().expect("valid loopback socket"),
+        Duration::from_millis(300),
+    )
+    .is_ok()
+}
+
+#[cfg(target_os = "windows")]
+fn backend_sidecar_path(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    use tauri::path::BaseDirectory;
+
+    app.path()
+        .resolve("resources/windows/oxy-backend.exe", BaseDirectory::Resource)
+        .ok()
+        .filter(|path| path.exists())
+}
+
+#[cfg(target_os = "windows")]
+fn launch_backend_sidecar(app: &tauri::AppHandle) -> Result<(), String> {
+    if backend_port_open() {
+        return Ok(());
+    }
+
+    let path = backend_sidecar_path(app)
+        .ok_or_else(|| "Bundled backend sidecar was not found in packaged resources.".to_string())?;
+
+    let child = Command::new(path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| format!("Failed to launch bundled backend sidecar: {e}"))?;
+
+    let state = app.state::<BackendSidecarState>();
+    let mut guard = state.0.lock().map_err(|_| "Failed to lock backend sidecar state.".to_string())?;
+    *guard = Some(child);
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn stop_backend_sidecar(app: &tauri::AppHandle) {
+    if let Some(state) = app.try_state::<BackendSidecarState>() {
+        if let Ok(mut guard) = state.0.lock() {
+            if let Some(mut child) = guard.take() {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        }
+    }
 }
 
 #[derive(Clone, Serialize)]
@@ -296,9 +361,17 @@ fn get_network_connections() -> Result<String, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
+        .setup(|_app| {
+            #[cfg(target_os = "windows")]
+            {
+                _app.manage(BackendSidecarState(Mutex::new(None)));
+                let _ = launch_backend_sidecar(_app.handle());
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             get_system_info,
             get_home_dir,
@@ -316,7 +389,17 @@ pub fn run() {
             install_plugin,
             list_tool_adapters,
             execute_tool_adapter,
-        ])
-        .run(tauri::generate_context!())
-        .expect("error while running Oxy");
+        ]);
+
+    let app = builder
+        .build(tauri::generate_context!())
+        .expect("error while building Oxy");
+
+    app
+        .run(|_app, _event| {
+            #[cfg(target_os = "windows")]
+            if matches!(_event, RunEvent::Exit | RunEvent::ExitRequested { .. }) {
+                stop_backend_sidecar(_app);
+            }
+        });
 }
