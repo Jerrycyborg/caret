@@ -24,11 +24,11 @@ Run this checklist on a real Windows 10/11 device after installing a fresh build
 
 ## 1. Startup
 
-- [ ] App launches without an error dialog or crash
-- [ ] Home dashboard loads — CPU, RAM, and disk tiles all show values
-- [ ] Active incidents section renders (empty list is fine)
-- [ ] No "Backend offline" banner on first open
-- [ ] Backend online indicator shows green in the Help tab
+- [No] App launches without an error dialog or crash
+- [No] Home dashboard loads — CPU, RAM, and disk tiles all show values
+- [No...empty] Active incidents section renders (empty list is fine)
+- [No] No "Backend offline" banner on first open
+- [No] Backend online indicator shows green in the Help tab
 
 ---
 
@@ -37,25 +37,25 @@ Run this checklist on a real Windows 10/11 device after installing a fresh build
 > Re-test with no API keys set and no Ollama running.
 
 - [ ] Amber banner appears: "No AI model is configured for this device. Contact IT to enable the Help assistant."
-- [ ] Textarea is disabled
-- [ ] Send button is disabled
-- [ ] No crash or blank screen
+- [No] Textarea is disabled
+- [No] Send button is disabled
+- [No] No crash or blank screen
 
 ---
 
 ## 3. Help Tab — AI Configured
 
-- [ ] Model selector is visible in the header
-- [ ] Send a short message → response streams token by token
-- [ ] Shift+Enter inserts a newline; Enter sends
-- [ ] Conversation appears in the sidebar list after first message
-- [ ] Switching to a different conversation loads its history correctly
+- [No] Model selector is visible in the header
+- [NO] Send a short message → response streams token by token
+- [Yes] Shift+Enter inserts a newline; Enter sends
+- [No] Conversation appears in the sidebar list after first message
+- [No] Switching to a different conversation loads its history correctly
 
 ---
 
 ## 4. Incidents Panel
 
-- [ ] Panel loads without error
+- [No] Panel loads without error
 - [ ] Triggering a test incident from Home "Get IT Help" creates an entry in the list
 - [ ] Incident detail view shows status, description, and timestamp
 - [ ] "Create IT ticket" button is present on an incident with Jira configured
@@ -93,29 +93,29 @@ Run this checklist on a real Windows 10/11 device after installing a fresh build
 
 ## 8. Settings — Non-Admin User
 
-- [ ] Log in as a standard domain user (not in `ROL-ADM-Admins` / not a local admin)
-- [ ] Open Settings → sees "Settings are managed by your IT department"
-- [ ] Management server status badge is visible
-- [ ] No editable fields are shown
-- [ ] No way to reach Jira credentials or support policy config
+- [No] Log in as a standard domain user (not in `ROL-ADM-Admins` / not a local admin)
+- [No] Open Settings → sees "Settings are managed by your IT department"
+- [No] Management server status badge is visible
+- [No] No editable fields are shown
+- [No] No way to reach Jira credentials or support policy config
 
 ---
 
 ## 9. Settings — Admin User
 
 - [ ] Log in as a member of `ROL-ADM-Admins` (or a local admin if `CARET_ADMIN_GROUP` is empty)
-- [ ] Open Settings → full config panel is visible
-- [ ] All sections present: Org, Ticketing, Support Policy, Management
-- [ ] Changes saved in Settings persist after app restart
+- [No] Open Settings → full config panel is visible
+- [No] All sections present: Org, Ticketing, Support Policy, Management
+- [No] Changes saved in Settings persist after app restart
 
 ---
 
 ## 10. Security Panel
-
-- [ ] Panel loads and shows: firewall state, BitLocker status, system event error count, active connection count
-- [ ] Non-admin user: action buttons are absent or show a "Requires admin" message
-- [ ] Admin user: clicking a remediation action triggers a UAC prompt
-- [ ] After UAC approval: action executes and result is shown in the panel
+(crashed. whole app - stuck)
+- [No] Panel loads and shows: firewall state, BitLocker status, system event error count, active connection count
+- [No] Non-admin user: action buttons are absent or show a "Requires admin" message
+- [No] Admin user: clicking a remediation action triggers a UAC prompt
+- [No] After UAC approval: action executes and result is shown in the panel
 
 ---
 
@@ -130,8 +130,8 @@ Run this checklist on a real Windows 10/11 device after installing a fresh build
 
 ## 12. Edge Cases and Security
 
-- [ ] Start app with no network → Ollama fetch times out silently (no crash; amber banner shown in Help tab)
+- [No] Start app with no network → Ollama fetch times out silently (no crash; amber banner shown in Help tab)
 - [ ] Set `CARET_ADMIN_GROUP` to a value with special characters (e.g. `foo;bar`) → user is treated as non-admin; no PowerShell execution; no injection
 - [ ] Revoke Jira OAuth in Settings → "Sign in with Jira" banner reappears in Incidents panel on next load
 - [ ] Kill the backend sidecar mid-conversation → "Could not reach the Caret backend" error appears in chat; backend status indicator flips to offline
-- [ ] Relaunch after sidecar kill → sidecar restarts automatically; app recovers without manual intervention
+- [No] Relaunch after sidecar kill → sidecar restarts automatically; app recovers without manual intervention

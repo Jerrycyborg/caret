@@ -40,7 +40,10 @@ where
 }
 
 fn run_powershell(script: &str) -> Result<String, String> {
-    run_command("powershell", ["-NoProfile", "-Command", script])
+    run_command(
+        "powershell",
+        ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script],
+    )
 }
 
 fn command_exists(program: &str) -> bool {
@@ -342,8 +345,9 @@ fn get_compliance_status() -> ComplianceStatus {
         .unwrap_or(0);
 
     let recent_errors = run_powershell(
-        "(Get-EventLog -LogName System -Newest 50 -EntryType Error,Warning \
-        -ErrorAction SilentlyContinue | Measure-Object).Count",
+        "(Get-WinEvent -LogName System -MaxEvents 50 -ErrorAction SilentlyContinue \
+        | Where-Object { $_.LevelDisplayName -in 'Error','Warning' } \
+        | Measure-Object).Count",
     )
     .map(|out| out.trim().parse::<usize>().unwrap_or(0))
     .unwrap_or(0);
