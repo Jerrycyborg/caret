@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 interface Message {
   id: string;
@@ -56,6 +57,7 @@ export default function Chat({
   const [model, setModel] = useState("ollama/llama3.2");
   const [isStreaming, setIsStreaming] = useState(false);
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
+  const [backendError, setBackendError] = useState<string | null>(null);
   const [modelReady, setModelReady] = useState<{ ready: boolean; hint?: string } | null>(null);
   const [taskHandoff, setTaskHandoff] = useState<TaskHandoff | null>(null);
   const [conversationMeta, setConversationMeta] = useState<ConversationMeta | null>(null);
@@ -67,8 +69,16 @@ export default function Chat({
   }, [messages]);
 
   useEffect(() => {
+    invoke<{ status: string; message: string }>("get_backend_status")
+      .then((s) => {
+        if (s.status === "unavailable") {
+          setBackendOnline(false);
+          setBackendError(s.message);
+        }
+      })
+      .catch(() => {});
     fetch(`${BACKEND_URL}/health`)
-      .then((r) => r.ok && setBackendOnline(true))
+      .then((r) => { if (r.ok) { setBackendOnline(true); setBackendError(null); } })
       .catch(() => setBackendOnline(false));
     fetch(`${BACKEND_URL}/v1/models/status`)
       .then((r) => r.json())
@@ -221,8 +231,8 @@ export default function Chat({
           </span>
         )}
         {backendOnline !== null && (
-          <span className={`backend-status ${backendOnline ? "online" : "offline"}`}>
-            {backendOnline ? "● Backend online" : "● Backend offline"}
+          <span className={`backend-status ${backendOnline ? "online" : "offline"}`} title={backendError ?? undefined}>
+            {backendOnline ? "● Backend online" : `● Backend offline${backendError ? " — " + backendError : ""}`}
           </span>
         )}
       </div>

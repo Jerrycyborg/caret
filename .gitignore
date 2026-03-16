@@ -26,8 +26,8 @@ dist-ssr
 # Tauri
 src-tauri/target/
 src-tauri/gen/
-src-tauri/resources/windows/oxy-backend.exe
-src-tauri/resources/windows/oxy-backend.manifest
+src-tauri/resources/windows/caret-backend.exe
+src-tauri/resources/windows/caret-backend.manifest
 
 # Python
 __pycache__/

@@ -110,10 +110,13 @@ fn get_backend_status(app: tauri::AppHandle) -> BackendStatus {
             status: "starting".to_string(),
             message: "Backend is starting…".to_string(),
         },
-        Err(e) => BackendStatus {
-            status: "unavailable".to_string(),
-            message: e,
-        },
+        Err(e) => {
+            eprintln!("[caret] Backend unavailable: {e}");
+            BackendStatus {
+                status: "unavailable".to_string(),
+                message: e,
+            }
+        }
     }
 }
 
@@ -367,7 +370,10 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
             app.manage(BackendSidecarState(Mutex::new(None)));
-            let _ = launch_backend_sidecar(app.handle());
+            if let Err(e) = launch_backend_sidecar(app.handle()) {
+                eprintln!("[caret] Backend sidecar failed to start: {e}");
+                // Non-fatal — frontend will show "Backend offline" banner
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
