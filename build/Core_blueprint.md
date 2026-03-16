@@ -11,21 +11,22 @@ Give every user an always-on IT support tool that:
 
 ## Core Identity
 
-- local-first: runs on the device, no cloud dependency for core function
-- support-first: every feature exists to help the user or their IT team resolve device issues
-- lightweight: no bundled model weights, no Docker, no Python requirement on target devices
-- policy-bounded: auto-fix stays deterministic and within an explicit allowlist
-- safe around privileged actions: UAC elevation required, all actions auditable
+- **local-first**: runs on the device, no cloud dependency for core function
+- **zero-config for users**: IT deploys credentials once; users open the app and everything works
+- **support-first**: every feature exists to help the user or their IT team resolve device issues
+- **lightweight**: no bundled model weights, no Docker, no Python requirement on target devices
+- **policy-bounded**: auto-fix stays deterministic and within an explicit allowlist
+- **safe around privileged actions**: UAC elevation required, all actions auditable
 
 ## Product Lanes
 
 | Lane | Purpose |
 |---|---|
-| Sessions | IT support chat — user describes a problem, Caret guides resolution |
-| Support | Automated monitoring — incidents, auto-fix queue, escalation, Jira tickets |
-| System | Live device health — CPU, RAM, disk, top processes |
-| Security | Privileged visibility — firewall, services, users, audit log, controlled actions |
-| Settings | Model setup, Jira config, support policy, management server |
+| Home | Dashboard — CPU/RAM/disk health tiles, active incident list, quick actions |
+| Help | AI-powered IT support chat |
+| Incidents | Automated monitoring — incidents, auto-fix queue, escalation, Jira tickets |
+| Security | Privileged visibility — firewall, BitLocker, event log, connections; admin-gated UAC actions |
+| Settings | Admin-only — Jira config, support policy, admin group, management server |
 
 ## What Caret Is Not
 
@@ -38,6 +39,7 @@ Give every user an always-on IT support tool that:
 
 - Tauri shell stays thin — WebView2, IPC only
 - Rust owns privileged local actions (UAC, netsh, taskkill, services)
-- Python backend sidecar owns AI, storage, monitoring, and network calls
-- Backend is loopback-only (localhost:8000) — no inbound surface
+- Python backend sidecar owns AI, storage, monitoring, Jira, and network calls
+- Backend is loopback-only (`localhost:8000`) — no inbound surface
 - Management channel is opt-in, controlled by IT admin at deployment
+- Settings are admin-gated — non-admins never see or touch configuration

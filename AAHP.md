@@ -10,11 +10,13 @@ Three pillars:
 
 ## Product Lanes
 
-- `Sessions` — IT support chat
-- `Support` — monitoring, incidents, auto-fix, Jira escalation
-- `System` — live device health (CPU, RAM, disk, processes)
-- `Security` — firewall, services, users, audit log
-- `Settings` — model config, Jira, support policy, management server URL
+| Lane | Purpose |
+|---|---|
+| Home | Dashboard — CPU/RAM/disk tiles, active incident list, quick actions |
+| Help | AI-powered IT support chat |
+| Incidents | Monitoring, auto-fix queue, escalation, Jira ticket creation |
+| Security | Compliance status — firewall, BitLocker, event errors; admin-gated UAC actions |
+| Settings | Admin-only config — Jira, support policy, admin group, management server |
 
 ## Current State (v0.1.9)
 
@@ -22,26 +24,25 @@ Three pillars:
 - Backend sidecar (`caret-backend.exe`) is Python/FastAPI, runs on localhost:8000
 - Support daemon: checks device health every 5 min, creates incidents, queues auto-fixes
 - Jira ticket creation: `Create IT ticket` button on any incident → POSTs logs + context to Jira
-- Management channel: optional control server URL in Settings, checkin daemon runs every 60s
+- Jira OAuth 2.0 (3LO): IT deploys `CARET_JIRA_OAUTH_CLIENT_ID` + `CARET_JIRA_OAUTH_CLIENT_SECRET`; users click "Sign in with Jira" in Incidents panel; tokens stored in DB and auto-refreshed
+- Management channel: optional control server URL in Settings; checkin daemon runs every 60s; `CARET_MANAGEMENT_TOKEN` bearer header sent when set
 - Security panel: compliance status (firewall, BitLocker, event errors, connections); admin-gated UAC actions
-- Admin access: Windows local admin (default); AD group (`ROL-ADM-Admins`) via env `CARET_ADMIN_GROUP` or Settings field
-- Jira OAuth 2.0: IT deploys with `CARET_JIRA_OAUTH_CLIENT_ID` + `CARET_JIRA_OAUTH_CLIENT_SECRET`; users click "Sign in with Jira", tokens auto-refresh
-- `backend/services/config.py`: clean sections — `org`, `ticketing`, `support_policy`, `integrations`, `management`
+- Admin access: Windows local admin (default); AD group via `CARET_ADMIN_GROUP` env var or Settings field
+- Settings: admin-gated — non-admins see "managed by IT" view; admins see full config
+- Help tab: graceful no-AI state — amber banner + disabled input when no model is configured
+- Config sections: `org`, `ticketing`, `support_policy`, `management`
 
 ## Next Priority
 
-1. ~~Nav restructure: Home, Help, Incidents, Security, Settings~~ — done (v0.1.3)
-2. ~~Startup stabilisation + orphan cleanup~~ — done (v0.1.4)
-3. ~~Security panel rebuild + admin access~~ — done (v0.1.5)
-4. ~~Verify Jira ticket creation end-to-end~~ — done (v0.1.6); use "Test connection" in Settings to validate with real credentials
-5. ~~Wire `admin_group` into Rust `get_admin_status`~~ — done (v0.1.5)
-6. Microsoft Copilot auth (MSAL SSO) — on hold, needs Azure AD app registration
-7. Broaden auto-fix: more remediation classes
+1. Microsoft Copilot auth (MSAL SSO) — on hold, needs Azure AD app registration
+2. Broaden auto-fix: more remediation classes beyond `cleanup_candidates`, `diagnostics`, `readiness_refresh`
+3. Windows installer packaging with env var injection at deploy time
+4. Management server (central control plane)
 
 ## Build Rules
 
-1. Update AAHP.md + CHANGELOG.md after each meaningful change
-2. `Core_blueprint.md` and `BUILD_BLUEPRINT.md` are source of truth
+1. Update `AAHP.md` + `CHANGELOG.md` after each meaningful change
+2. `Core_blueprint.md` and `BUILD_BLUEPRINT.md` are source of truth for product scope
 3. No feature additions beyond what is explicitly asked
 4. Read only relevant files/sections — no whole-file reads when a grep will do
 5. Focus on stable, shippable, working code

@@ -1,9 +1,9 @@
 {
   "name": "caret",
-  "version": "0.1.0",
-  "milestone": "Caret Fork Baseline",
-  "release_date": "2026-03-12",
-  "status": "product-refocus",
+  "version": "0.1.9",
+  "milestone": "Security Hardening + Jira OAuth + Zero-Config UX",
+  "release_date": "2026-03-16",
+  "status": "active",
   "source_of_truth": [
     "build/Core_blueprint.md",
     "build/BUILD_BLUEPRINT.md",

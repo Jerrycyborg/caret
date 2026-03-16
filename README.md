@@ -1,63 +1,72 @@
-<img src="assets/readme-banner.svg" alt="Caret banner" width="100%" />
-
 # Caret
 
-Caret is a lightweight local OS assistant for device care, support automation, and safe remediation.
+Caret is a local-first IT support assistant for Windows devices. It gives every user an always-on tool to troubleshoot device issues, monitor device health, and escalate to IT — without requiring any user configuration.
 
-## Product Direction
+## What Caret Does
 
-Caret is being built as:
-- a local-first device assistant
-- a support-first desktop app for monitoring, cleanup, and small-issue remediation
-- a control surface for incidents, escalations, and IT ticketing
-- a lightweight packaged app with a bundled local backend and optional local model setup
+- **Help** — AI-powered support chat. Describe a device problem; Caret guides resolution. Works with a local Ollama model or a cloud API key configured by IT.
+- **Home** — Dashboard showing live CPU/RAM/disk health and active incidents at a glance.
+- **Incidents** — Automated monitoring daemon detects disk/CPU/memory issues, queues safe auto-fixes, and surfaces incidents for review or escalation.
+- **Security** — Compliance visibility: firewall state, BitLocker, system event errors, active connections. Admin-gated remediation actions with UAC elevation.
+- **Settings** — Admin-only. Non-admins see a managed view. Admins configure Jira, support policy, and management server.
 
-Caret keeps the visible product narrow and support-first.
-Older executor/task capabilities remain dormant in the codebase for stability, but they are not part of the current product surface.
+## Design Principles
 
-## Visible App Surface
+- **Local-first** — core functions work without cloud connectivity
+- **Zero-config for users** — IT deploys credentials once via env vars; users open the app and everything works
+- **Policy-bounded auto-fix** — remediation stays within an explicit allowlist; no open-ended execution
+- **Safe around privileged actions** — UAC elevation required, all actions auditable
+- **Windows only** — no macOS or Linux build paths
 
-- `Sessions`
-- `Support`
-- `System`
-- `Security`
-- `Settings`
+## Building
 
-## What Caret Does Today
+Prerequisites: [Rust](https://rustup.rs), [Node.js](https://nodejs.org), [WebView2](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) (pre-installed on Windows 11).
 
-- monitors local device health and creates support incidents
-- runs safe auto-fixes for bounded cleanup and readiness tasks
-- keeps privileged actions behind Rust-backed approval boundaries
-- creates Jira tickets from support incidents
-- ships as a Windows desktop installer with a bundled backend sidecar
+```
+npm install
+npm run tauri build
+```
 
-## Packaging Direction
+Installer output: `src-tauri\target\release\bundle\nsis\caret_<version>_x64-setup.exe`
 
-Caret keeps the installer light by bundling:
-- the Tauri desktop shell
-- the Rust runtime
-- the local backend sidecar
-- SQLite state
+## IT Deployment — Environment Variables
 
-Caret does not bundle:
-- model weights
-- Docker
-- a full BitNet runtime stack
+| Variable | Purpose |
+|---|---|
+| `CARET_JIRA_BASE_URL` | Jira instance URL |
+| `CARET_JIRA_PROJECT_KEY` | Default project for ticket creation |
+| `CARET_JIRA_USER_EMAIL` | Service account email (Basic auth) |
+| `CARET_JIRA_API_TOKEN` | API token (Basic auth) — never stored in DB |
+| `CARET_JIRA_OAUTH_CLIENT_ID` | Atlassian OAuth 2.0 client ID |
+| `CARET_JIRA_OAUTH_CLIENT_SECRET` | Atlassian OAuth 2.0 client secret — env-only, never stored |
+| `CARET_ADMIN_GROUP` | AD security group for admin access (e.g. `ROL-ADM-Admins`); leave empty to use Windows local admin |
+| `CARET_MANAGEMENT_SERVER_URL` | Central management server URL (optional) |
+| `CARET_MANAGEMENT_TOKEN` | Bearer token for management server checkins (optional) |
+| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GEMINI_API_KEY` | Cloud AI provider key — at least one required unless Ollama is running locally |
 
-Local model support should stay optional and use an Ollama-compatible runtime on first setup rather than inflating the installer.
+## AI Model Setup
 
-## Fork Lineage
+Caret does not bundle model weights. Configure one of:
+- **Local**: Install [Ollama](https://ollama.com) and pull a model (`ollama pull llama3.2`). No API key needed.
+- **Cloud**: Set one of the API key env vars above. IT sets this at deployment; users never touch it.
 
-Caret was forked from the preserved personal baseline:
-- `personal-oxy-baseline-v0.6.2`
+If no model is configured, the Help tab shows an amber banner and disables the input until IT enables a model.
 
-The original Oxy repo remains the personal/internal branch.
-Caret is the org-facing product track.
+## Architecture
+
+| Layer | Technology | Responsibility |
+|---|---|---|
+| Desktop shell | Tauri 2 (Rust + WebView2) | Window, IPC, privileged OS calls, UAC |
+| Frontend | React + TypeScript (Vite) | UI |
+| Backend sidecar | Python / FastAPI (`caret-backend.exe`) | AI chat, storage, monitoring, Jira, management checkin |
+| Storage | SQLite (aiosqlite) | Conversations, incidents, config, OAuth tokens |
+
+The backend runs on `localhost:8000` and is loopback-only — no inbound surface exposed to the network.
 
 ## Source of Truth
 
-- [build/Core_blueprint.md](/Users/marshal/Library/CloudStorage/OneDrive-TWSPartnersAG/Dokumente/Internal%20projects/Caret/build/Core_blueprint.md)
-- [build/BUILD_BLUEPRINT.md](/Users/marshal/Library/CloudStorage/OneDrive-TWSPartnersAG/Dokumente/Internal%20projects/Caret/build/BUILD_BLUEPRINT.md)
-- [AAHP.md](/Users/marshal/Library/CloudStorage/OneDrive-TWSPartnersAG/Dokumente/Internal%20projects/Caret/AAHP.md)
-- [release.json](/Users/marshal/Library/CloudStorage/OneDrive-TWSPartnersAG/Dokumente/Internal%20projects/Caret/release.json)
-- [CHANGELOG.md](/Users/marshal/Library/CloudStorage/OneDrive-TWSPartnersAG/Dokumente/Internal%20projects/Caret/CHANGELOG.md)
+- [build/Core_blueprint.md](build/Core_blueprint.md)
+- [build/BUILD_BLUEPRINT.md](build/BUILD_BLUEPRINT.md)
+- [AAHP.md](AAHP.md)
+- [CHANGELOG.md](CHANGELOG.md)
+- [release.json](release.json)
