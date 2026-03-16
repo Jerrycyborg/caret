@@ -1318,6 +1318,22 @@ body {
   color: var(--danger);
 }
 
+.log-viewer {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-family: "Consolas", "Menlo", monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  max-height: 360px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin-top: 8px;
+}
+
 .sidebar-nav::-webkit-scrollbar,
 .res-scroll-list::-webkit-scrollbar,
 .settings-scroll::-webkit-scrollbar {

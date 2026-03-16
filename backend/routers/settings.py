@@ -1,3 +1,4 @@
+import logging
 import os
 import aiosqlite
 from fastapi import APIRouter, HTTPException
@@ -9,6 +10,7 @@ from services.jira_oauth import build_auth_url, clear_tokens, exchange_code, get
 from services.ticketing import TicketingError, _validate_jira_config
 from services.jira_oauth import get_token as get_oauth_token
 
+log = logging.getLogger(__name__)
 router = APIRouter()
 
 PROVIDER_ENV_MAP: dict[str, str] = {
@@ -81,25 +83,30 @@ async def jira_oauth_start():
     config = await get_config_section("ticketing")
     client_id = config.get("jira_oauth_client_id", "").strip()
     if not client_id:
+        log.warning("OAuth start failed: jira_oauth_client_id not configured")
         raise HTTPException(status_code=400, detail="Jira OAuth client_id is not configured. Add it in Settings → Jira.")
     auth_url, _state = build_auth_url(client_id)
+    log.info("Jira OAuth flow started")
     return {"auth_url": auth_url}
 
 
 @router.get("/settings/jira/oauth/callback")
 async def jira_oauth_callback(code: str = "", state: str = "", error: str = "", error_description: str = ""):
     if error:
+        log.warning("Jira OAuth callback error: %s — %s", error, error_description)
         return HTMLResponse(
             f"<html><body><h2>Jira login failed</h2><p>{error_description or error}</p>"
             "<p>You can close this tab and return to Caret.</p></body></html>",
             status_code=400,
         )
     if not code or not state:
+        log.warning("Jira OAuth callback: missing code or state")
         raise HTTPException(status_code=400, detail="Missing code or state in OAuth callback.")
     config = await get_config_section("ticketing")
     client_id = config.get("jira_oauth_client_id", "").strip()
     client_secret = os.environ.get("CARET_JIRA_OAUTH_CLIENT_SECRET", "").strip()
     if not client_id or not client_secret:
+        log.error("Jira OAuth callback: credentials incomplete (client_id=%s, secret_set=%s)", bool(client_id), bool(client_secret))
         return HTMLResponse(
             "<html><body><h2>Configuration error</h2><p>OAuth credentials are not fully configured in Caret.</p></body></html>",
             status_code=400,
@@ -107,11 +114,13 @@ async def jira_oauth_callback(code: str = "", state: str = "", error: str = "", 
     try:
         result = await exchange_code(code, state, client_id, client_secret)
     except ValueError as exc:
+        log.warning("Jira OAuth token exchange failed: %s", exc)
         return HTMLResponse(
             f"<html><body><h2>Jira login failed</h2><p>{exc}</p>"
             "<p>You can close this tab and return to Caret.</p></body></html>",
             status_code=400,
         )
+    log.info("Jira OAuth connected: site=%s", result.get("site_name"))
     return HTMLResponse(
         f"<html><body><h2>Connected to Jira</h2>"
         f"<p>Site: <strong>{result['site_name']}</strong></p>"
@@ -127,6 +136,7 @@ async def jira_oauth_status():
 @router.delete("/settings/jira/oauth")
 async def jira_oauth_signout():
     await clear_tokens()
+    log.info("Jira OAuth tokens cleared")
     return {"ok": True}
 
 
@@ -162,10 +172,13 @@ async def test_jira_connection():
                 raise TicketingError(f"Could not reach Jira: {exc.reason}") from exc
 
         display_name = await asyncio.to_thread(_check)
+        log.info("Jira test connection: OK (user=%s, method=%s)", display_name, "oauth" if oauth else "basic")
         return {"ok": True, "authenticated_as": display_name, "method": "oauth" if oauth else "basic"}
     except TicketingError as exc:
+        log.warning("Jira test connection failed: %s", exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ValueError as exc:
+        log.warning("Jira test connection config error: %s", exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
@@ -174,5 +187,7 @@ async def update_settings_config(section: str, body: ConfigSectionBody):
     try:
         config = await set_config_section(section, body.value)
     except ValueError as exc:
+        log.warning("Config update failed [%s]: %s", section, exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    log.info("Config updated: section=%s", section)
     return {"ok": True, "section": section, "config": masked_config({section: config})[section]}

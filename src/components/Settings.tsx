@@ -82,6 +82,16 @@ export default function Settings() {
   const [config, setConfig] = useState<ConfigState>(EMPTY_CONFIG);
   const [mgmtStatus, setMgmtStatus] = useState<MgmtStatus>("not_configured");
   const [jiraOauth, setJiraOauth] = useState<{ app_configured: boolean; connected: boolean; cloud_id?: string; updated_at?: string } | null>(null);
+  const [logLines, setLogLines] = useState<string[]>([]);
+  const [logPath, setLogPath] = useState("");
+  const [logOpen, setLogOpen] = useState(false);
+
+  const refreshLogs = () => {
+    fetch(`${BACKEND_URL}/v1/logs?lines=200`)
+      .then((r) => r.json())
+      .then((data) => { setLogLines(data.lines ?? []); setLogPath(data.path ?? ""); })
+      .catch(() => {});
+  };
 
   useEffect(() => {
     // Resolve admin status first using configured admin_group if available
@@ -370,6 +380,30 @@ export default function Settings() {
               <button className="btn-save" onClick={() => saveSection("support_policy")} disabled={saving.support_policy}>{feedback.support_policy || (saving.support_policy ? "…" : "Save support policy")}</button>
             </div>
 
+          </div>
+        </section>
+
+        <section className="settings-panel">
+          <div className="settings-section-title">Diagnostics</div>
+          <div className="settings-scroll">
+            <div className="settings-card">
+              <strong>Backend log</strong>
+              {logPath && <div className="settings-line" style={{ fontFamily: "monospace", fontSize: "11px" }}>{logPath}</div>}
+              <div className="provider-input-row settings-form-row">
+                <button className="btn-save" onClick={() => { setLogOpen((o) => !o); if (!logOpen) refreshLogs(); }}>
+                  {logOpen ? "Hide log" : "Show log"}
+                </button>
+                {logOpen && <button className="btn-clear" onClick={refreshLogs}>Refresh</button>}
+                {logOpen && logLines.length > 0 && (
+                  <button className="btn-clear" onClick={() => navigator.clipboard.writeText(logLines.join("\n"))}>Copy all</button>
+                )}
+              </div>
+              {logOpen && (
+                <pre className="log-viewer">
+                  {logLines.length === 0 ? "No log entries yet." : logLines.join("\n")}
+                </pre>
+              )}
+            </div>
           </div>
         </section>
       </div>

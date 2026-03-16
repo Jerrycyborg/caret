@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import mimetypes
 import uuid
 from dataclasses import dataclass
@@ -15,6 +16,8 @@ import aiosqlite
 from database import get_db_path
 from services.config import get_config_section
 from services.jira_oauth import get_token as get_oauth_token
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -51,12 +54,14 @@ async def create_support_ticket(task_id: str, incident_detail: dict[str, Any]) -
         raise TicketingError(f"Unsupported ticket adapter: {adapter}")
 
     _validate_jira_config(config)
+    log.info("Creating Jira ticket for task_id=%s", task_id)
     payload = _build_jira_payload(config, incident_detail)
     created = await _jira_create_issue(config, payload)
     ticket_key = created.get("key", "")
     ticket_id = created.get("id", "")
     ticket_url = _jira_ticket_url(config, ticket_key)
     attachment_count = await _attach_support_artifacts(config, ticket_id, incident_detail)
+    log.info("Jira ticket created: key=%s url=%s attachments=%d", ticket_key, ticket_url, attachment_count)
 
     created_at = datetime.now(timezone.utc).isoformat()
     async with aiosqlite.connect(get_db_path()) as db:
@@ -221,8 +226,10 @@ async def _jira_request_bytes(auth_header: str, url: str, body: bytes, headers: 
                 return response.read()
         except error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="ignore")
+            log.error("Jira HTTP error %s at %s: %s", exc.code, url, detail or exc.reason)
             raise TicketingError(f"Jira request failed ({exc.code}): {detail or exc.reason}") from exc
         except error.URLError as exc:
+            log.error("Jira unreachable at %s: %s", url, exc.reason)
             raise TicketingError(f"Could not reach Jira: {exc.reason}") from exc
 
     import asyncio
