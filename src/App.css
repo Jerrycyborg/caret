@@ -942,6 +942,15 @@ body {
   background: rgba(239, 68, 68, 0.1);
 }
 
+.model-unavailable-banner {
+  background: rgba(234, 179, 8, 0.12);
+  border-bottom: 1px solid rgba(234, 179, 8, 0.3);
+  color: #ca8a04;
+  font-size: 13px;
+  padding: 8px 16px;
+  text-align: center;
+}
+
 /* ===== CONVERSATION LIST ===== */
 .conv-section {
   border-top: 1px solid var(--border);

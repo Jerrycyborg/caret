@@ -14,20 +14,20 @@ Ship a Windows desktop build that verifies on Windows, handles local support mon
 ## Local Validation
 
 - [ ] `build/windows/install-from-git.ps1` installs prerequisites or fails clearly
-- [ ] `build/windows/install-from-git.ps1` builds an MSI and installs Oxy locally
-- [ ] installed Oxy launches after bootstrap
-- [ ] packaged Oxy launches its bundled backend automatically
-- [ ] packaged Oxy works without Python installed on the target machine
+- [ ] `build/windows/install-from-git.ps1` builds an MSI and installs Caret locally
+- [ ] installed Caret launches after bootstrap
+- [ ] packaged Caret launches its bundled backend automatically
+- [ ] packaged Caret works without Python installed on the target machine
 - [ ] App launches on supported Windows version
 - [ ] Backend launches locally
 - [ ] Chat round-trip works
 - [ ] Support lane renders incident queues and detail correctly
 - [ ] Windows support monitoring reads CPU, memory, process, and cleanup targets correctly
-- [ ] Workflows remain separate from support incidents
+- [ ] support remains the primary visible lane for incidents and auto-fix
 - [ ] Security panel read-only commands return usable data
 - [ ] Approved privileged actions trigger a Windows UAC prompt
 - [ ] Denied or canceled UAC auth leaves system state unchanged
-- [ ] Linked IT ticket creation still reports back into Oxy
+- [ ] linked IT ticket creation still reports back into Caret
 
 ## Release Notes
 

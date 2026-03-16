@@ -14,6 +14,7 @@ import aiosqlite
 
 from database import get_db_path
 from services.config import get_config_section
+from services.jira_oauth import get_token as get_oauth_token
 
 
 @dataclass
@@ -101,7 +102,13 @@ def _validate_jira_config(config: dict[str, Any]) -> None:
 def _build_jira_payload(config: dict[str, Any], incident_detail: dict[str, Any]) -> dict[str, Any]:
     task = incident_detail["task"]
     incident = incident_detail["incident"]
-    description = _build_jira_description(incident_detail)
+    description_lines = _build_jira_description(incident_detail)
+    adf_content = [
+        {"type": "paragraph", "content": [{"type": "text", "text": line}]}
+        if line.strip()
+        else {"type": "paragraph", "content": []}
+        for line in description_lines
+    ]
     fields: dict[str, Any] = {
         "project": {"key": config["jira_project_key"]},
         "summary": f"[{task.get('support_category') or 'support'}] {task['title']}",
@@ -109,12 +116,7 @@ def _build_jira_payload(config: dict[str, Any], incident_detail: dict[str, Any])
         "description": {
             "type": "doc",
             "version": 1,
-            "content": [
-                {
-                    "type": "paragraph",
-                    "content": [{"type": "text", "text": description}],
-                }
-            ],
+            "content": adf_content or [{"type": "paragraph", "content": []}],
         },
         "labels": ["caret", "support_incident", *(config.get("jira_default_labels") or [])],
     }
@@ -126,7 +128,7 @@ def _build_jira_payload(config: dict[str, Any], incident_detail: dict[str, Any])
     return {"fields": fields}
 
 
-def _build_jira_description(incident_detail: dict[str, Any]) -> str:
+def _build_jira_description(incident_detail: dict[str, Any]) -> list[str]:
     task = incident_detail["task"]
     incident = incident_detail["incident"]
     policy_events = incident_detail.get("policy_events", [])[:6]
@@ -151,12 +153,23 @@ def _build_jira_description(incident_detail: dict[str, Any]) -> str:
     lines.append("Recent timeline:")
     for item in timeline:
         lines.append(f"- {item['timestamp']}: {item['title']} — {item['detail']}")
-    return "\n".join(lines)
+    return lines
+
+
+async def _jira_base_url(config: dict[str, Any]) -> tuple[str, str]:
+    """Returns (base_url, auth_header). Prefers OAuth; falls back to Basic."""
+    oauth = await get_oauth_token()
+    if oauth:
+        return oauth["cloud_url"], f"Bearer {oauth['access_token']}"
+    base = config["jira_base_url"].rstrip("/")
+    auth = base64.b64encode(f"{config['jira_user_email']}:{config['jira_api_token']}".encode()).decode()
+    return base, f"Basic {auth}"
 
 
 async def _jira_create_issue(config: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
-    url = config["jira_base_url"].rstrip("/") + "/rest/api/3/issue"
-    return await _jira_request_json(config, url, json.dumps(payload).encode("utf-8"), {"Content-Type": "application/json"})
+    base, auth_header = await _jira_base_url(config)
+    url = base + "/rest/api/3/issue"
+    return await _jira_request_json(auth_header, url, json.dumps(payload).encode("utf-8"), {"Content-Type": "application/json"})
 
 
 async def _attach_support_artifacts(config: dict[str, Any], ticket_id: str, incident_detail: dict[str, Any]) -> int:
@@ -166,9 +179,10 @@ async def _attach_support_artifacts(config: dict[str, Any], ticket_id: str, inci
     filename = f"caret-incident-{incident_detail['task']['id'][:8]}.txt"
     content_type = mimetypes.guess_type(filename)[0] or "text/plain"
     body, boundary = _multipart_body(filename, attachment_text.encode("utf-8"), content_type)
-    url = config["jira_base_url"].rstrip("/") + f"/rest/api/3/issue/{ticket_id}/attachments"
+    base, auth_header = await _jira_base_url(config)
+    url = base + f"/rest/api/3/issue/{ticket_id}/attachments"
     await _jira_request_bytes(
-        config,
+        auth_header,
         url,
         body,
         {
@@ -192,14 +206,13 @@ def _build_attachment_text(incident_detail: dict[str, Any]) -> str:
     )
 
 
-async def _jira_request_json(config: dict[str, Any], url: str, body: bytes, headers: dict[str, str]) -> dict[str, Any]:
-    raw = await _jira_request_bytes(config, url, body, headers)
+async def _jira_request_json(auth_header: str, url: str, body: bytes, headers: dict[str, str]) -> dict[str, Any]:
+    raw = await _jira_request_bytes(auth_header, url, body, headers)
     return json.loads(raw.decode("utf-8"))
 
 
-async def _jira_request_bytes(config: dict[str, Any], url: str, body: bytes, headers: dict[str, str]) -> bytes:
-    auth = base64.b64encode(f"{config['jira_user_email']}:{config['jira_api_token']}".encode("utf-8")).decode("utf-8")
-    request_headers = {"Authorization": f"Basic {auth}", "Accept": "application/json", **headers}
+async def _jira_request_bytes(auth_header: str, url: str, body: bytes, headers: dict[str, str]) -> bytes:
+    request_headers = {"Authorization": auth_header, "Accept": "application/json", **headers}
 
     def _send() -> bytes:
         req = request.Request(url, data=body, headers=request_headers, method="POST")

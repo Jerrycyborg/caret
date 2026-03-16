@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from "react";
-import ModelSelector from "./ModelSelector";
 
 interface Message {
   id: string;
@@ -57,6 +56,7 @@ export default function Chat({
   const [model, setModel] = useState("ollama/llama3.2");
   const [isStreaming, setIsStreaming] = useState(false);
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
+  const [modelReady, setModelReady] = useState<{ ready: boolean; hint?: string } | null>(null);
   const [taskHandoff, setTaskHandoff] = useState<TaskHandoff | null>(null);
   const [conversationMeta, setConversationMeta] = useState<ConversationMeta | null>(null);
   const activeConvRef = useRef<string | null>(null);
@@ -70,6 +70,10 @@ export default function Chat({
     fetch(`${BACKEND_URL}/health`)
       .then((r) => r.ok && setBackendOnline(true))
       .catch(() => setBackendOnline(false));
+    fetch(`${BACKEND_URL}/v1/models/status`)
+      .then((r) => r.json())
+      .then((data) => setModelReady({ ready: data.ready, hint: data.hint }))
+      .catch(() => {});
   }, []);
 
   // Load history when conversation changes
@@ -204,7 +208,12 @@ export default function Chat({
   return (
     <div className="chat">
       <div className="chat-header">
-        <ModelSelector value={model} onChange={setModel} />
+        <select className="model-select" value={model} onChange={(e) => setModel(e.target.value)}>
+          <option value="ollama/llama3.2">Local (llama3.2)</option>
+          <option value="openai/gpt-4o">OpenAI GPT-4o</option>
+          <option value="anthropic/claude-sonnet-4-6">Claude Sonnet</option>
+          <option value="gemini/gemini-1.5-pro">Gemini 1.5 Pro</option>
+        </select>
         {conversationMeta && (
           <span className="session-chip">
             {conversationMeta.channel_type} / {conversationMeta.session_status}
@@ -218,11 +227,17 @@ export default function Chat({
         )}
       </div>
 
+      {modelReady?.ready === false && (
+        <div className="model-unavailable-banner">
+          {modelReady.hint ?? "No AI model is configured for this device. Contact IT to enable the Help assistant."}
+        </div>
+      )}
+
       <div className="chat-messages">
         {messages.length === 0 && (
           <div className="chat-empty">
-            <div className="chat-empty-logo">OXY</div>
-            <p>Your AI-powered personal OS assistant.</p>
+            <div className="chat-empty-logo">Caret</div>
+            <p>Your AI-powered IT support assistant.</p>
             <p className="chat-empty-hint">
               Ask anything, give me a task, or explore the panels on the left.
             </p>
@@ -282,12 +297,12 @@ export default function Chat({
           }}
           placeholder="Ask Caret for help with your device\u2026 (Enter to send, Shift+Enter for newline)"
           rows={2}
-          disabled={isStreaming}
+          disabled={isStreaming || modelReady?.ready === false}
         />
         <button
           className={`send-button${isStreaming ? " sending" : ""}`}
           onClick={sendMessage}
-          disabled={isStreaming || !input.trim()}
+          disabled={isStreaming || !input.trim() || modelReady?.ready === false}
         >
           {isStreaming ? "\u2026" : "Send"}
         </button>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 interface KeyStatus {
   provider: string;
@@ -31,9 +32,9 @@ type ConfigState = {
     default_escalation_policy: string;
     allowed_remediation_classes: string[];
   };
-  integrations: {
-    telegram_enabled: boolean;
-    whatsapp_enabled: boolean;
+  management: {
+    server_url: string;
+    admin_group: string;
   };
 };
 
@@ -64,20 +65,38 @@ const EMPTY_CONFIG: ConfigState = {
     default_escalation_policy: "manual_review",
     allowed_remediation_classes: ["cleanup_candidates", "diagnostics", "readiness_refresh"],
   },
-  integrations: {
-    telegram_enabled: false,
-    whatsapp_enabled: false,
+  management: {
+    server_url: "",
+    admin_group: "",
   },
 };
 
+type MgmtStatus = "not_configured" | "ok" | "unreachable" | "error";
+
 export default function Settings() {
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [keyStatuses, setKeyStatuses] = useState<Record<string, KeyStatus>>({});
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [feedback, setFeedback] = useState<Record<string, string>>({});
   const [config, setConfig] = useState<ConfigState>(EMPTY_CONFIG);
+  const [mgmtStatus, setMgmtStatus] = useState<MgmtStatus>("not_configured");
+  const [jiraOauth, setJiraOauth] = useState<{ app_configured: boolean; connected: boolean; cloud_id?: string; updated_at?: string } | null>(null);
 
   useEffect(() => {
+    // Resolve admin status first using configured admin_group if available
+    fetch(`${BACKEND_URL}/v1/settings/config`)
+      .then((r) => r.json())
+      .then(async (data) => {
+        const adminGroup: string = data.config?.management?.admin_group ?? "";
+        const status = await invoke<{ is_admin: boolean }>("get_admin_status", { adminGroup: adminGroup || undefined });
+        setIsAdmin(status.is_admin);
+        if (status.is_admin) {
+          setConfig({ ...EMPTY_CONFIG, ...(data.config ?? {}) });
+        }
+      })
+      .catch(() => setIsAdmin(false));
+
     fetch(`${BACKEND_URL}/v1/settings/keys`)
       .then((r) => r.json())
       .then((data) => {
@@ -87,15 +106,20 @@ export default function Settings() {
       })
       .catch(() => {});
 
-    fetch(`${BACKEND_URL}/v1/settings/config`)
+    fetch(`${BACKEND_URL}/v1/management/status`)
       .then((r) => r.json())
-      .then((data) => setConfig({ ...EMPTY_CONFIG, ...(data.config ?? {}) }))
+      .then((data) => setMgmtStatus(data.last_status ?? "not_configured"))
+      .catch(() => {});
+
+    fetch(`${BACKEND_URL}/v1/settings/jira/oauth/status`)
+      .then((r) => r.json())
+      .then((data) => setJiraOauth(data))
       .catch(() => {});
   }, []);
 
-  const showFeedback = (key: string, msg: string) => {
+  const showFeedback = (key: string, msg: string, ms = 2000) => {
     setFeedback((prev) => ({ ...prev, [key]: msg }));
-    setTimeout(() => setFeedback((prev) => ({ ...prev, [key]: "" })), 2000);
+    setTimeout(() => setFeedback((prev) => ({ ...prev, [key]: "" })), ms);
   };
 
   const saveKey = async (provider: string) => {
@@ -149,12 +173,35 @@ export default function Settings() {
     }
   };
 
+  if (isAdmin === null) {
+    return <div className="settings"><div className="settings-header"><div className="settings-title">Settings</div></div><div className="compliance-loading">Checking access…</div></div>;
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="settings">
+        <div className="settings-header">
+          <div>
+            <div className="settings-title">Settings</div>
+            <div className="settings-subtitle">Managed by your IT department.</div>
+          </div>
+        </div>
+        <div className="admin-section">
+          <div className="settings-line">Configuration is managed centrally by IT. Contact your IT helpdesk if you need a change.</div>
+          <div className="settings-line" style={{ marginTop: "0.5rem" }}>
+            Management server: <strong>{mgmtStatus === "ok" ? "Connected" : mgmtStatus === "unreachable" ? "Unreachable" : "Not configured"}</strong>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="settings">
       <div className="settings-header">
         <div>
           <div className="settings-title">Settings</div>
-          <div className="settings-subtitle">Local model setup, Jira ticketing, support policy, and deployment identity.</div>
+          <div className="settings-subtitle">Model keys, Jira ticketing, support policy, and deployment identity.</div>
         </div>
       </div>
 
@@ -211,6 +258,43 @@ export default function Settings() {
 
             <div className="settings-card">
               <strong>Jira ticketing</strong>
+
+              <div className="provider-card-header" style={{ marginBottom: "0.5rem" }}>
+                <div>
+                  {jiraOauth?.connected ? (
+                    <span className="provider-status ok">Connected · {jiraOauth.cloud_id}</span>
+                  ) : jiraOauth?.app_configured === false ? (
+                    <span className="provider-status missing">OAuth not configured — contact IT</span>
+                  ) : (
+                    <span className="provider-status missing">Not signed in</span>
+                  )}
+                </div>
+                {jiraOauth?.connected ? (
+                  <button className="btn-clear" onClick={async () => {
+                    await fetch(`${BACKEND_URL}/v1/settings/jira/oauth`, { method: "DELETE" });
+                    setJiraOauth({ connected: false, app_configured: jiraOauth.app_configured });
+                  }}>Sign out</button>
+                ) : jiraOauth?.app_configured ? (
+                  <button className="btn-save" onClick={async () => {
+                    showFeedback("jira_oauth", "Opening browser…");
+                    try {
+                      const res = await fetch(`${BACKEND_URL}/v1/settings/jira/oauth/start`, { method: "POST" });
+                      const data = await res.json();
+                      if (!res.ok) throw new Error(data.detail ?? "Failed");
+                      await invoke("plugin:opener|open_url", { url: data.auth_url });
+                      showFeedback("jira_oauth", "Complete login in browser…", 8000);
+                      setTimeout(async () => {
+                        const r = await fetch(`${BACKEND_URL}/v1/settings/jira/oauth/status`);
+                        setJiraOauth(await r.json());
+                      }, 6000);
+                    } catch (e) {
+                      showFeedback("jira_oauth", String(e).replace("Error: ", ""), 5000);
+                    }
+                  }}>{feedback.jira_oauth || "Sign in with Jira"}</button>
+                ) : null}
+              </div>
+
+              <div className="settings-line"><strong>API token (fallback if OAuth not set up)</strong></div>
               <div className="provider-input-row settings-form-row">
                 <input className="provider-input" placeholder="Jira base URL" value={config.ticketing.jira_base_url} onChange={(e) => setConfig((prev) => ({ ...prev, ticketing: { ...prev.ticketing, jira_base_url: e.target.value } }))} />
                 <input className="provider-input" placeholder="Project key" value={config.ticketing.jira_project_key} onChange={(e) => setConfig((prev) => ({ ...prev, ticketing: { ...prev.ticketing, jira_project_key: e.target.value } }))} />
@@ -226,13 +310,51 @@ export default function Settings() {
               <div className="provider-input-row settings-form-row">
                 <input className="provider-input" placeholder="Components (comma separated)" value={config.ticketing.jira_default_components.join(",")} onChange={(e) => setConfig((prev) => ({ ...prev, ticketing: { ...prev.ticketing, jira_default_components: e.target.value.split(",").map((item) => item.trim()).filter(Boolean) } }))} />
               </div>
-              <button className="btn-save" onClick={() => saveSection("ticketing")} disabled={saving.ticketing}>{feedback.ticketing || (saving.ticketing ? "…" : "Save ticketing")}</button>
+              <div className="provider-input-row">
+                <button className="btn-save" onClick={() => saveSection("ticketing")} disabled={saving.ticketing}>{feedback.ticketing || (saving.ticketing ? "…" : "Save ticketing")}</button>
+                <button className="btn-clear" onClick={async () => {
+                  showFeedback("ticketing_test", "Testing…");
+                  try {
+                    const res = await fetch(`${BACKEND_URL}/v1/settings/jira/test`, { method: "POST" });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail ?? "Failed");
+                    showFeedback("ticketing_test", `Connected as ${data.authenticated_as}`, 5000);
+                  } catch (e) {
+                    showFeedback("ticketing_test", String(e).replace("Error: ", ""), 5000);
+                  }
+                }}>{feedback.ticketing_test || "Test connection"}</button>
+              </div>
+            </div>
+
+            <div className="settings-card">
+              <strong>Management server</strong>
+              <div className="settings-line">Central control plane URL. Leave empty to run standalone. Set by your IT admin at deployment.</div>
+              <div className="provider-input-row settings-form-row">
+                <input
+                  className="provider-input"
+                  placeholder="https://caret.your-org.com"
+                  value={config.management.server_url}
+                  onChange={(e) => setConfig((prev) => ({ ...prev, management: { ...prev.management, server_url: e.target.value } }))}
+                />
+                <span className={`provider-status ${mgmtStatus === "ok" ? "ok" : "missing"}`}>
+                  {mgmtStatus === "ok" ? "Connected" : mgmtStatus === "unreachable" ? "Unreachable" : mgmtStatus === "error" ? "Error" : "Not configured"}
+                </span>
+              </div>
+              <div className="provider-input-row settings-form-row">
+                <input
+                  className="provider-input"
+                  placeholder="AD group SAM name (e.g. ROL-ADM-Admins) — leave empty to use local admin"
+                  value={config.management.admin_group}
+                  onChange={(e) => setConfig((prev) => ({ ...prev, management: { ...prev.management, admin_group: e.target.value } }))}
+                />
+              </div>
+              <button className="btn-save" onClick={() => saveSection("management")} disabled={saving.management}>{feedback.management || (saving.management ? "…" : "Save")}</button>
             </div>
           </div>
         </section>
 
         <section className="settings-panel">
-          <div className="settings-section-title">Support and Channels</div>
+          <div className="settings-section-title">Support Policy</div>
           <div className="settings-scroll">
             <div className="settings-card">
               <strong>Auto-fix policy</strong>
@@ -248,18 +370,6 @@ export default function Settings() {
               <button className="btn-save" onClick={() => saveSection("support_policy")} disabled={saving.support_policy}>{feedback.support_policy || (saving.support_policy ? "…" : "Save support policy")}</button>
             </div>
 
-            <div className="settings-card">
-              <strong>Channel availability</strong>
-              <label className="settings-toggle">
-                <input type="checkbox" checked={config.integrations.telegram_enabled} onChange={(e) => setConfig((prev) => ({ ...prev, integrations: { ...prev.integrations, telegram_enabled: e.target.checked } }))} />
-                <span>Telegram enabled</span>
-              </label>
-              <label className="settings-toggle">
-                <input type="checkbox" checked={config.integrations.whatsapp_enabled} onChange={(e) => setConfig((prev) => ({ ...prev, integrations: { ...prev.integrations, whatsapp_enabled: e.target.checked } }))} />
-                <span>WhatsApp enabled</span>
-              </label>
-              <button className="btn-save" onClick={() => saveSection("integrations")} disabled={saving.integrations}>{feedback.integrations || (saving.integrations ? "…" : "Save channels")}</button>
-            </div>
           </div>
         </section>
       </div>

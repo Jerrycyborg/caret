@@ -1,7 +1,16 @@
+import os
 from fastapi import APIRouter
 import httpx
 
 router = APIRouter()
+
+_PROVIDER_ENV = {
+    "openai": "OPENAI_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+    "gemini": "GEMINI_API_KEY",
+    "azure": "AZURE_API_KEY",
+    "ollama": "OLLAMA_API_BASE",
+}
 
 # Cloud provider model lists (static — keeps things fast and offline-capable)
 CLOUD_MODELS = [
@@ -34,3 +43,33 @@ async def list_models():
     models.extend(CLOUD_MODELS)
 
     return {"models": models}
+
+
+@router.get("/models/status")
+async def model_status():
+    """Returns whether at least one model is usable right now."""
+    # Check Ollama
+    ollama_ready = False
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            r = await client.get("http://localhost:11434/api/tags")
+            if r.status_code == 200:
+                ollama_ready = bool(r.json().get("models"))
+    except Exception:
+        pass
+
+    # Check cloud API keys
+    cloud_provider = next(
+        (p for p, env in _PROVIDER_ENV.items() if p != "ollama" and os.environ.get(env, "").strip()),
+        None,
+    )
+
+    if ollama_ready:
+        return {"ready": True, "source": "ollama"}
+    if cloud_provider:
+        return {"ready": True, "source": cloud_provider}
+    return {
+        "ready": False,
+        "source": None,
+        "hint": "No AI model is configured for this device. Contact IT to enable the Help assistant.",
+    }

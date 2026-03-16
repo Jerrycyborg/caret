@@ -1,1 +1,1 @@
-pub mod oxy_plugin;
+pub mod caret_plugin;

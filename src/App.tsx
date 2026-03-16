@@ -1,16 +1,16 @@
 import { useState, useCallback } from "react";
 import Sidebar from "./components/Sidebar";
+import Home from "./components/Home";
 import Chat from "./components/Chat";
-import Settings from "./components/Settings";
-import Resources from "./components/Resources";
 import Support from "./components/Support";
+import Settings from "./components/Settings";
 import SecurityPanel from "./components/SecurityPanel";
 import "./App.css";
 
-export type View = "chat" | "support" | "resources" | "security" | "settings";
+export type View = "home" | "help" | "incidents" | "security" | "settings";
 
 function App() {
-  const [view, setView] = useState<View>("chat");
+  const [view, setView] = useState<View>("home");
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [sidebarKey, setSidebarKey] = useState(0);
 
@@ -23,10 +23,6 @@ function App() {
     setSidebarKey((k) => k + 1);
   }, []);
 
-  const handleOpenTask = useCallback(() => {
-    setView("support");
-  }, []);
-
   return (
     <div className="app">
       <Sidebar
@@ -35,27 +31,29 @@ function App() {
         activeConvId={activeConvId}
         onSelectConv={(id) => {
           setActiveConvId(id);
-          setView("chat");
+          setView("help");
         }}
         onNewConv={() => {
           setActiveConvId(null);
-          setView("chat");
+          setView("help");
         }}
         refreshKey={sidebarKey}
       />
       <main className="main-content">
-        {view === "chat" && (
+        {view === "home" && (
+          <Home onNavigate={(v) => setView(v)} />
+        )}
+        {view === "help" && (
           <Chat
             conversationId={activeConvId}
             onConversationCreated={handleConvCreated}
             onConversationUpdated={handleConvUpdated}
-            onOpenTask={handleOpenTask}
+            onOpenTask={() => setView("incidents")}
           />
         )}
-        {view === "support" && <Support />}
-        {view === "settings" && <Settings />}
-        {view === "resources" && <Resources />}
+        {view === "incidents" && <Support />}
         {view === "security" && <SecurityPanel />}
+        {view === "settings" && <Settings />}
       </main>
     </div>
   );

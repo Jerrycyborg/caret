@@ -10,14 +10,13 @@ from database import get_db_path
 
 
 def env_value(name: str, default: str = "") -> str:
-    legacy = name.replace("CARET_", "OXY_", 1)
-    return os.environ.get(name, os.environ.get(legacy, default))
+    return os.environ.get(name, default)
 
 
 CONFIG_DEFAULTS: dict[str, dict[str, Any]] = {
     "org": {
-        "org_name": env_value("CARET_ORG_NAME", "Caret Internal"),
-        "environment_label": env_value("CARET_ENV_LABEL", "development"),
+        "org_name": env_value("CARET_ORG_NAME", ""),
+        "environment_label": env_value("CARET_ENV_LABEL", ""),
     },
     "ticketing": {
         "adapter_type": env_value("CARET_TICKETING_ADAPTER", "jira"),
@@ -26,24 +25,18 @@ CONFIG_DEFAULTS: dict[str, dict[str, Any]] = {
         "jira_issue_type": env_value("CARET_JIRA_ISSUE_TYPE", "Task"),
         "jira_user_email": env_value("CARET_JIRA_USER_EMAIL", ""),
         "jira_api_token": env_value("CARET_JIRA_API_TOKEN", ""),
-        "jira_default_labels": [label for label in env_value("CARET_JIRA_LABELS", "").split(",") if label.strip()],
-        "jira_default_components": [component for component in env_value("CARET_JIRA_COMPONENTS", "").split(",") if component.strip()],
+        "jira_default_labels": [l for l in env_value("CARET_JIRA_LABELS", "").split(",") if l.strip()],
+        "jira_default_components": [c for c in env_value("CARET_JIRA_COMPONENTS", "").split(",") if c.strip()],
+        "jira_oauth_client_id": env_value("CARET_JIRA_OAUTH_CLIENT_ID", ""),
     },
     "support_policy": {
         "auto_fix_enabled": env_value("CARET_SUPPORT_AUTO_FIX_ENABLED", "true").lower() != "false",
         "default_escalation_policy": env_value("CARET_SUPPORT_ESCALATION_POLICY", "manual_review"),
         "allowed_remediation_classes": ["cleanup_candidates", "diagnostics", "readiness_refresh"],
     },
-    "workflow_policy": {
-        "task_plan_approval_default": True,
-        "openclaw_enabled": env_value("CARET_OPENCLAW_ENABLED", "true").lower() != "false",
-        "wraith_enabled": env_value("CARET_WRAITH_ENABLED", "true").lower() != "false",
-    },
-    "integrations": {
-        "telegram_enabled": env_value("CARET_TELEGRAM_ENABLED", "false").lower() == "true",
-        "whatsapp_enabled": env_value("CARET_WHATSAPP_ENABLED", "false").lower() == "true",
-        "openclaw_enabled": env_value("CARET_OPENCLAW_ENABLED", "true").lower() != "false",
-        "wraith_enabled": env_value("CARET_WRAITH_ENABLED", "true").lower() != "false",
+    "management": {
+        "server_url": env_value("CARET_MANAGEMENT_SERVER_URL", ""),
+        "admin_group": env_value("CARET_ADMIN_GROUP", ""),
     },
 }
 
@@ -79,6 +72,10 @@ async def set_config_section(section: str, value: dict[str, Any]) -> dict[str, A
         if secret:
             os.environ["CARET_JIRA_API_TOKEN"] = secret
         payload["jira_api_token"] = ""
+        oauth_secret = str(payload.get("jira_oauth_client_secret", "")).strip()
+        if oauth_secret:
+            os.environ["CARET_JIRA_OAUTH_CLIENT_SECRET"] = oauth_secret
+        payload.pop("jira_oauth_client_secret", None)
     merged = _merged_config(section, payload)
     async with aiosqlite.connect(get_db_path()) as db:
         await db.execute(

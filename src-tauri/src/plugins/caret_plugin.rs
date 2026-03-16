@@ -6,7 +6,7 @@ use tauri::command;
 
 const INSTALL_STATE_PATH: &str = "plugins/installed.txt";
 
-pub trait OxyPlugin {
+pub trait CaretPlugin {
     fn name(&self) -> &'static str;
     fn description(&self) -> &'static str;
     fn author(&self) -> &'static str;
@@ -38,21 +38,21 @@ const PLUGIN_CATALOG: &[PluginCatalogEntry] = &[
     PluginCatalogEntry {
         name: "Echo",
         description: "Echoes your input back to you.",
-        author: "Oxy Core",
+        author: "Caret Core",
         version: "1.0.0",
         category: "Utility",
     },
     PluginCatalogEntry {
         name: "Weather",
         description: "Shows current weather for your city.",
-        author: "Oxy Core",
+        author: "Caret Core",
         version: "0.1.0",
         category: "Weather",
     },
 ];
 
 pub struct PluginRegistry {
-    plugins: Vec<Box<dyn OxyPlugin + Send + Sync>>,
+    plugins: Vec<Box<dyn CaretPlugin + Send + Sync>>,
     installed: HashSet<String>,
 }
 
@@ -64,7 +64,7 @@ impl PluginRegistry {
         }
     }
 
-    pub fn register(&mut self, plugin: Box<dyn OxyPlugin + Send + Sync>) {
+    pub fn register(&mut self, plugin: Box<dyn CaretPlugin + Send + Sync>) {
         self.plugins.push(plugin);
     }
 
@@ -109,7 +109,7 @@ impl PluginRegistry {
 
 pub struct EchoPlugin;
 
-impl OxyPlugin for EchoPlugin {
+impl CaretPlugin for EchoPlugin {
     fn name(&self) -> &'static str {
         "Echo"
     }
@@ -119,7 +119,7 @@ impl OxyPlugin for EchoPlugin {
     }
 
     fn author(&self) -> &'static str {
-        "Oxy Core"
+        "Caret Core"
     }
 
     fn version(&self) -> &'static str {

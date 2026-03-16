@@ -1,8 +1,8 @@
 #[test]
 fn test_echo_plugin() {
-    use oxy_lib::plugins::oxy_plugin::{EchoPlugin, OxyPlugin};
+    use caret_lib::plugins::caret_plugin::{CaretPlugin, EchoPlugin};
     let plugin = EchoPlugin;
-    let input = "Hello, Oxy!";
+    let input = "Hello, Caret!";
     let output = plugin.run(input);
     assert_eq!(output, input);
 }

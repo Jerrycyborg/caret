@@ -1,21 +1,15 @@
 pub mod plugins;
 mod privilege;
 mod tools;
-use plugins::oxy_plugin::{discover_plugins, install_plugin, list_plugins, run_plugin, toggle_plugin_enabled};
+use plugins::caret_plugin::{discover_plugins, install_plugin, list_plugins, run_plugin, toggle_plugin_enabled};
 use privilege::{execute_privileged_action, preview_privileged_action};
 use serde::Serialize;
 use std::ffi::OsStr;
-use std::process::Command;
-use tools::{execute_tool_adapter, list_tool_adapters};
-
-#[cfg(target_os = "windows")]
-use std::process::{Child, Stdio};
-#[cfg(target_os = "windows")]
+use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
-#[cfg(target_os = "windows")]
 use std::time::Duration;
-#[cfg(target_os = "windows")]
 use tauri::{Manager, RunEvent};
+use tools::{execute_tool_adapter, list_tool_adapters};
 
 fn run_command<I, S>(program: &str, args: I) -> Result<String, String>
 where
@@ -45,7 +39,6 @@ where
     }
 }
 
-#[cfg(target_os = "windows")]
 fn run_powershell(script: &str) -> Result<String, String> {
     run_command("powershell", ["-NoProfile", "-Command", script])
 }
@@ -54,10 +47,8 @@ fn command_exists(program: &str) -> bool {
     Command::new(program).arg("--version").output().is_ok()
 }
 
-#[cfg(target_os = "windows")]
 struct BackendSidecarState(Mutex<Option<Child>>);
 
-#[cfg(target_os = "windows")]
 fn backend_port_open() -> bool {
     std::net::TcpStream::connect_timeout(
         &"127.0.0.1:8000".parse().expect("valid loopback socket"),
@@ -66,17 +57,14 @@ fn backend_port_open() -> bool {
     .is_ok()
 }
 
-#[cfg(target_os = "windows")]
 fn backend_sidecar_path(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
     use tauri::path::BaseDirectory;
-
     app.path()
         .resolve("resources/windows/caret-backend.exe", BaseDirectory::Resource)
         .ok()
         .filter(|path| path.exists())
 }
 
-#[cfg(target_os = "windows")]
 fn launch_backend_sidecar(app: &tauri::AppHandle) -> Result<(), String> {
     if backend_port_open() {
         return Ok(());
@@ -98,7 +86,34 @@ fn launch_backend_sidecar(app: &tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(target_os = "windows")]
+#[derive(Clone, Serialize)]
+pub struct BackendStatus {
+    pub status: String, // "ready" | "starting" | "unavailable"
+    pub message: String,
+}
+
+#[tauri::command]
+fn get_backend_status(app: tauri::AppHandle) -> BackendStatus {
+    if backend_port_open() {
+        return BackendStatus {
+            status: "ready".to_string(),
+            message: "Backend is running.".to_string(),
+        };
+    }
+
+    // Try to launch if not already running
+    match launch_backend_sidecar(&app) {
+        Ok(_) => BackendStatus {
+            status: "starting".to_string(),
+            message: "Backend is starting…".to_string(),
+        },
+        Err(e) => BackendStatus {
+            status: "unavailable".to_string(),
+            message: e,
+        },
+    }
+}
+
 fn stop_backend_sidecar(app: &tauri::AppHandle) {
     if let Some(state) = app.try_state::<BackendSidecarState>() {
         if let Ok(mut guard) = state.0.lock() {
@@ -119,52 +134,24 @@ pub struct ExecutionTargetInfo {
 }
 
 fn detect_execution_targets() -> Vec<ExecutionTargetInfo> {
-    let mut targets = vec![ExecutionTargetInfo {
-        id: "cpu".to_string(),
-        label: "CPU".to_string(),
-        available: true,
-        reason: "Always available local execution path.".to_string(),
-    }];
-
-    if cfg!(target_os = "macos") {
-        targets.push(ExecutionTargetInfo {
-            id: "metal".to_string(),
-            label: "Metal".to_string(),
+    vec![
+        ExecutionTargetInfo {
+            id: "cpu".to_string(),
+            label: "CPU".to_string(),
             available: true,
-            reason: "macOS target detected; Metal-backed acceleration path is available for future routing.".to_string(),
-        });
-    } else {
-        targets.push(ExecutionTargetInfo {
-            id: "metal".to_string(),
-            label: "Metal".to_string(),
-            available: false,
-            reason: "Metal is only available on macOS.".to_string(),
-        });
-    }
-
-    targets.push(ExecutionTargetInfo {
-        id: "cuda".to_string(),
-        label: "CUDA".to_string(),
-        available: command_exists("nvidia-smi"),
-        reason: if command_exists("nvidia-smi") {
-            "NVIDIA tooling detected on host.".to_string()
-        } else {
-            "NVIDIA tooling not detected on host.".to_string()
+            reason: "Always available local execution path.".to_string(),
         },
-    });
-
-    targets.push(ExecutionTargetInfo {
-        id: "npu".to_string(),
-        label: "NPU".to_string(),
-        available: cfg!(target_os = "macos"),
-        reason: if cfg!(target_os = "macos") {
-            "Apple platform detected; NPU/Neural Engine routing is a future candidate.".to_string()
-        } else {
-            "Dedicated NPU routing is not detected in the current build.".to_string()
+        ExecutionTargetInfo {
+            id: "cuda".to_string(),
+            label: "CUDA".to_string(),
+            available: command_exists("nvidia-smi"),
+            reason: if command_exists("nvidia-smi") {
+                "NVIDIA tooling detected on host.".to_string()
+            } else {
+                "NVIDIA tooling not detected on host.".to_string()
+            },
         },
-    });
-
-    targets
+    ]
 }
 
 use sysinfo::{CpuRefreshKind, Disks, MemoryRefreshKind, ProcessRefreshKind, RefreshKind, System};
@@ -217,7 +204,6 @@ fn get_system_info() -> SystemInfo {
             .with_memory(MemoryRefreshKind::everything())
             .with_processes(ProcessRefreshKind::everything()),
     );
-    // Second refresh so CPU usage deltas are meaningful
     std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
     sys.refresh_cpu_all();
     sys.refresh_memory();
@@ -280,106 +266,112 @@ fn get_system_info() -> SystemInfo {
     }
 }
 
-
 #[tauri::command]
 fn get_home_dir() -> String {
     dirs::home_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("/"))
+        .unwrap_or_else(|| std::path::PathBuf::from("C:\\"))
         .to_string_lossy()
         .into_owned()
 }
 
-#[tauri::command]
-fn get_firewall_status() -> Result<String, String> {
-    #[cfg(target_os = "macos")]
-    return run_command("/sbin/pfctl", ["-s", "info"]);
-    #[cfg(target_os = "linux")]
-    return run_command("ufw", ["status"]);
-    #[cfg(target_os = "windows")]
-    return run_command("netsh", ["advfirewall", "show", "allprofiles"]);
-
-    #[allow(unreachable_code)]
-    Err("Firewall status is not supported on this platform.".to_string())
+#[derive(Serialize)]
+pub struct AdminStatus {
+    pub is_admin: bool,
+    pub method: String,
 }
 
 #[tauri::command]
-fn get_services() -> Result<String, String> {
-    #[cfg(target_os = "macos")]
-    return run_command("launchctl", ["list"]);
-    #[cfg(target_os = "linux")]
-    return run_command(
-        "systemctl",
-        ["list-units", "--type=service", "--state=running"],
-    );
-    #[cfg(target_os = "windows")]
-    return run_powershell(
-        "Get-Service | Where-Object {$_.Status -eq 'Running'} | Select-Object Status,Name,DisplayName | Format-Table -AutoSize",
-    );
+fn get_admin_status(admin_group: Option<String>) -> AdminStatus {
+    let group = admin_group.as_deref().unwrap_or("").trim().to_string();
 
-    #[allow(unreachable_code)]
-    Err("Service listing is not supported on this platform.".to_string())
+    if !group.is_empty() {
+        // Strictly validate: only allow characters safe in AD group names
+        // Rejects anything that could break out of a PowerShell string literal
+        let safe = group.chars().all(|c| c.is_alphanumeric() || matches!(c, '-' | '_' | ' ' | '.'));
+        if !safe {
+            return AdminStatus { is_admin: false, method: "ad_group:rejected_unsafe_name".to_string() };
+        }
+        // Embed the literal group name as a PowerShell variable to avoid string injection
+        let script = format!(
+            r#"$target = '{group}'; $g = ([System.Security.Principal.WindowsIdentity]::GetCurrent()).Groups | ForEach-Object {{ try {{ $_.Translate([System.Security.Principal.NTAccount]).Value }} catch {{ '' }} }}; ($g -match [regex]::Escape($target)).Count -gt 0"#
+        );
+        let is_admin = run_powershell(&script)
+            .map(|out| out.trim().to_lowercase() == "true")
+            .unwrap_or(false);
+        return AdminStatus {
+            is_admin,
+            method: format!("ad_group:{group}"),
+        };
+    }
+
+    // Default: Windows local admin check
+    let script = "(New-Object System.Security.Principal.WindowsPrincipal(\
+        [System.Security.Principal.WindowsIdentity]::GetCurrent())\
+        ).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)";
+    let is_admin = run_powershell(script)
+        .map(|out| out.trim().to_lowercase() == "true")
+        .unwrap_or(false);
+    AdminStatus {
+        is_admin,
+        method: "windows_local_admin".to_string(),
+    }
+}
+
+#[derive(Serialize)]
+pub struct ComplianceStatus {
+    pub firewall_on: bool,
+    pub bitlocker_on: bool,
+    pub active_connections: usize,
+    pub recent_errors: usize,
 }
 
 #[tauri::command]
-fn get_users() -> Result<String, String> {
-    #[cfg(target_os = "macos")]
-    return run_command("dscl", [".", "list", "/Users"]);
-    #[cfg(target_os = "linux")]
-    return run_command("cut", ["-d:", "-f1", "/etc/passwd"]);
-    #[cfg(target_os = "windows")]
-    return run_command("net", ["user"]);
+fn get_compliance_status() -> ComplianceStatus {
+    let firewall_on = run_command("netsh", ["advfirewall", "show", "allprofiles"])
+        .map(|out| out.lines().filter(|l| l.contains("State")).any(|l| l.contains("ON")))
+        .unwrap_or(false);
 
-    #[allow(unreachable_code)]
-    Err("User listing is not supported on this platform.".to_string())
-}
+    let bitlocker_on = run_powershell(
+        "(Get-BitLockerVolume -MountPoint 'C:').ProtectionStatus -eq 'On'",
+    )
+    .map(|out| out.trim().to_lowercase() == "true")
+    .unwrap_or(false);
 
-#[tauri::command]
-fn get_audit_log() -> Result<String, String> {
-    #[cfg(target_os = "macos")]
-    return run_command("log", ["show", "--last", "1h", "--style", "compact"]);
-    #[cfg(target_os = "linux")]
-    return run_command("journalctl", ["-n", "100", "--no-pager"]);
-    #[cfg(target_os = "windows")]
-    return run_powershell("Get-EventLog -LogName System -Newest 100 | Format-Table -AutoSize");
+    let active_connections = run_command("netstat", ["-an"])
+        .map(|out| out.lines().filter(|l| l.contains("ESTABLISHED")).count())
+        .unwrap_or(0);
 
-    #[allow(unreachable_code)]
-    Err("Audit log access is not supported on this platform.".to_string())
-}
+    let recent_errors = run_powershell(
+        "(Get-EventLog -LogName System -Newest 50 -EntryType Error,Warning \
+        -ErrorAction SilentlyContinue | Measure-Object).Count",
+    )
+    .map(|out| out.trim().parse::<usize>().unwrap_or(0))
+    .unwrap_or(0);
 
-#[tauri::command]
-fn get_network_connections() -> Result<String, String> {
-    #[cfg(target_os = "macos")]
-    return run_command("netstat", ["-an"]);
-    #[cfg(target_os = "linux")]
-    return run_command("ss", ["-tunap"]);
-    #[cfg(target_os = "windows")]
-    return run_command("netstat", ["-an"]);
-
-    #[allow(unreachable_code)]
-    Err("Network connection listing is not supported on this platform.".to_string())
+    ComplianceStatus {
+        firewall_on,
+        bitlocker_on,
+        active_connections,
+        recent_errors,
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let builder = tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
-        .setup(|_app| {
-            #[cfg(target_os = "windows")]
-            {
-                _app.manage(BackendSidecarState(Mutex::new(None)));
-                let _ = launch_backend_sidecar(_app.handle());
-            }
+        .setup(|app| {
+            app.manage(BackendSidecarState(Mutex::new(None)));
+            let _ = launch_backend_sidecar(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             get_system_info,
+            get_backend_status,
             get_home_dir,
-            get_firewall_status,
-            get_services,
-            get_users,
-            get_audit_log,
-            get_network_connections,
+            get_admin_status,
+            get_compliance_status,
             preview_privileged_action,
             execute_privileged_action,
             list_plugins,
@@ -389,17 +381,13 @@ pub fn run() {
             install_plugin,
             list_tool_adapters,
             execute_tool_adapter,
-        ]);
-
-    let app = builder
+        ])
         .build(tauri::generate_context!())
         .expect("error while building Caret");
 
-    app
-        .run(|_app, _event| {
-            #[cfg(target_os = "windows")]
-            if matches!(_event, RunEvent::Exit | RunEvent::ExitRequested { .. }) {
-                stop_backend_sidecar(_app);
-            }
-        });
+    app.run(|app, event| {
+        if matches!(event, RunEvent::Exit | RunEvent::ExitRequested { .. }) {
+            stop_backend_sidecar(app);
+        }
+    });
 }

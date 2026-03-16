@@ -36,6 +36,18 @@ async def init_db():
             )
         """)
         await db.execute("""
+            CREATE TABLE IF NOT EXISTS oauth_tokens (
+                provider TEXT PRIMARY KEY,
+                access_token TEXT NOT NULL DEFAULT '',
+                refresh_token TEXT NOT NULL DEFAULT '',
+                expires_at TEXT NOT NULL DEFAULT '',
+                scope TEXT NOT NULL DEFAULT '',
+                cloud_id TEXT NOT NULL DEFAULT '',
+                cloud_url TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        await db.execute("""
             CREATE TABLE IF NOT EXISTS api_keys (
                 provider TEXT PRIMARY KEY,
                 key_value TEXT NOT NULL,

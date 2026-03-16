@@ -1,39 +1,43 @@
 # Caret Core Blueprint
 
-Caret is a supervised local OS assistant focused on device care.
+Caret is a local-first IT support assistant deployed to Windows devices.
+
+## Product Mission
+
+Give every user an always-on IT support tool that:
+1. Helps them troubleshoot device issues through a guided support chat
+2. Monitors device health and flags performance problems automatically
+3. Creates Jira IT tickets from incidents with a single click, including relevant logs
 
 ## Core Identity
 
-Caret is:
-- local-first
-- support-first
-- lightweight
-- policy-bounded
-- safe around privileged actions
+- local-first: runs on the device, no cloud dependency for core function
+- support-first: every feature exists to help the user or their IT team resolve device issues
+- lightweight: no bundled model weights, no Docker, no Python requirement on target devices
+- policy-bounded: auto-fix stays deterministic and within an explicit allowlist
+- safe around privileged actions: UAC elevation required, all actions auditable
 
-Caret is not a general plugin marketplace, not a visible workflow engine, and not a public multi-agent surface.
-Dormant executor/task infrastructure may remain behind the scenes for stability, but the visible product is narrowed to device support.
+## Product Lanes
 
-## Main Product Lanes
+| Lane | Purpose |
+|---|---|
+| Sessions | IT support chat — user describes a problem, Caret guides resolution |
+| Support | Automated monitoring — incidents, auto-fix queue, escalation, Jira tickets |
+| System | Live device health — CPU, RAM, disk, top processes |
+| Security | Privileged visibility — firewall, services, users, audit log, controlled actions |
+| Settings | Model setup, Jira config, support policy, management server |
 
-- `Sessions` for support conversations and guided help
-- `Support` for incidents, monitoring, auto-fix, escalation, and ticketing
-- `System` for readable machine status
-- `Security` for privileged machine visibility and controlled actions
-- `Settings` for local model setup, Jira config, and deployment policy
+## What Caret Is Not
+
+- Not a generic AI assistant
+- Not a plugin marketplace
+- Not a workflow/task shell
+- Not multi-platform (Windows only)
 
 ## Architectural Guardrails
 
-- Tauri shell stays thin
-- Rust owns privileged local actions
-- local backend stays loopback-only
-- support incidents remain the main visible work unit
-- auto-fix stays deterministic and auditable
-- optional local models must not bloat the installer
-
-## Near-Term Priority
-
-1. stability of installed app behavior
-2. support automation and safe remediation
-3. lightweight local-model setup
-4. org-ready ticketing and deployment config
+- Tauri shell stays thin — WebView2, IPC only
+- Rust owns privileged local actions (UAC, netsh, taskkill, services)
+- Python backend sidecar owns AI, storage, monitoring, and network calls
+- Backend is loopback-only (localhost:8000) — no inbound surface
+- Management channel is opt-in, controlled by IT admin at deployment

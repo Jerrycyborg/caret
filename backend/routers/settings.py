@@ -3,7 +3,11 @@ import aiosqlite
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from database import get_db_path
-from services.config import get_all_config, masked_config, set_config_section
+from fastapi.responses import HTMLResponse
+from services.config import get_all_config, get_config_section, masked_config, set_config_section
+from services.jira_oauth import build_auth_url, clear_tokens, exchange_code, get_status
+from services.ticketing import TicketingError, _validate_jira_config
+from services.jira_oauth import get_token as get_oauth_token
 
 router = APIRouter()
 
@@ -70,6 +74,99 @@ async def get_settings_config():
 
 class ConfigSectionBody(BaseModel):
     value: dict
+
+
+@router.post("/settings/jira/oauth/start")
+async def jira_oauth_start():
+    config = await get_config_section("ticketing")
+    client_id = config.get("jira_oauth_client_id", "").strip()
+    if not client_id:
+        raise HTTPException(status_code=400, detail="Jira OAuth client_id is not configured. Add it in Settings → Jira.")
+    auth_url, _state = build_auth_url(client_id)
+    return {"auth_url": auth_url}
+
+
+@router.get("/settings/jira/oauth/callback")
+async def jira_oauth_callback(code: str = "", state: str = "", error: str = "", error_description: str = ""):
+    if error:
+        return HTMLResponse(
+            f"<html><body><h2>Jira login failed</h2><p>{error_description or error}</p>"
+            "<p>You can close this tab and return to Caret.</p></body></html>",
+            status_code=400,
+        )
+    if not code or not state:
+        raise HTTPException(status_code=400, detail="Missing code or state in OAuth callback.")
+    config = await get_config_section("ticketing")
+    client_id = config.get("jira_oauth_client_id", "").strip()
+    client_secret = os.environ.get("CARET_JIRA_OAUTH_CLIENT_SECRET", "").strip()
+    if not client_id or not client_secret:
+        return HTMLResponse(
+            "<html><body><h2>Configuration error</h2><p>OAuth credentials are not fully configured in Caret.</p></body></html>",
+            status_code=400,
+        )
+    try:
+        result = await exchange_code(code, state, client_id, client_secret)
+    except ValueError as exc:
+        return HTMLResponse(
+            f"<html><body><h2>Jira login failed</h2><p>{exc}</p>"
+            "<p>You can close this tab and return to Caret.</p></body></html>",
+            status_code=400,
+        )
+    return HTMLResponse(
+        f"<html><body><h2>Connected to Jira</h2>"
+        f"<p>Site: <strong>{result['site_name']}</strong></p>"
+        "<p>You can close this tab and return to Caret.</p></body></html>"
+    )
+
+
+@router.get("/settings/jira/oauth/status")
+async def jira_oauth_status():
+    return await get_status()
+
+
+@router.delete("/settings/jira/oauth")
+async def jira_oauth_signout():
+    await clear_tokens()
+    return {"ok": True}
+
+
+@router.post("/settings/jira/test")
+async def test_jira_connection():
+    import asyncio, base64, json, urllib.request as _req, urllib.error as _err
+
+    try:
+        config = await get_config_section("ticketing")
+        oauth = await get_oauth_token()
+        if oauth:
+            base_url = oauth["cloud_url"]
+            auth_header = f"Bearer {oauth['access_token']}"
+        else:
+            _validate_jira_config(config)
+            base_url = config["jira_base_url"].rstrip("/")
+            auth_header = "Basic " + base64.b64encode(
+                f"{config['jira_user_email']}:{config['jira_api_token']}".encode()
+            ).decode()
+
+        url = base_url + "/rest/api/3/myself"
+
+        def _check():
+            r = _req.Request(url, headers={"Authorization": auth_header, "Accept": "application/json"})
+            try:
+                with _req.urlopen(r, timeout=10) as resp:
+                    data = json.loads(resp.read())
+                    return data.get("displayName") or data.get("emailAddress") or "OK"
+            except _err.HTTPError as exc:
+                detail = exc.read().decode("utf-8", errors="ignore")
+                raise TicketingError(f"Jira auth failed ({exc.code}): {detail or exc.reason}") from exc
+            except _err.URLError as exc:
+                raise TicketingError(f"Could not reach Jira: {exc.reason}") from exc
+
+        display_name = await asyncio.to_thread(_check)
+        return {"ok": True, "authenticated_as": display_name, "method": "oauth" if oauth else "basic"}
+    except TicketingError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.put("/settings/config/{section}")

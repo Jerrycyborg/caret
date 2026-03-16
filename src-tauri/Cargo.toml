@@ -23,9 +23,3 @@ serde_json = "1"
 sysinfo = "0.33"
 dirs = "5"
 
-[patch.crates-io]
-glib = { path = "../vendor/gtk-rs-core/glib" }
-glib-macros = { path = "../vendor/gtk-rs-core/glib-macros" }
-glib-sys = { path = "../vendor/gtk-rs-core/glib/sys" }
-gobject-sys = { path = "../vendor/gtk-rs-core/glib/gobject-sys" }
-gio-sys = { path = "../vendor/gtk-rs-core/gio/sys" }

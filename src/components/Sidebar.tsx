@@ -21,11 +21,11 @@ interface SidebarProps {
 const BACKEND_URL = "http://localhost:8000";
 
 const navItems: { id: View; label: string; icon: string }[] = [
-  { id: "chat", label: "Sessions", icon: "💬" },
-  { id: "support", label: "Support", icon: "🩺" },
-  { id: "resources", label: "System", icon: "📊" },
-  { id: "security", label: "Security", icon: "🔒" },
-  { id: "settings", label: "Settings", icon: "⚙️" },
+  { id: "home",      label: "Home",      icon: "🖥️" },
+  { id: "help",      label: "Help",      icon: "💬" },
+  { id: "incidents", label: "Incidents", icon: "🩺" },
+  { id: "security",  label: "Security",  icon: "🔒" },
+  { id: "settings",  label: "Settings",  icon: "⚙️" },
 ];
 
 export default function Sidebar({
@@ -62,28 +62,27 @@ export default function Sidebar({
           </button>
         ))}
       </nav>
-      <div className="conv-section">
-        <div className="conv-section-header">
-          <span className="conv-section-title">Chats</span>
-          <button className="new-conv-btn" onClick={onNewConv} title="New chat">+</button>
-        </div>
-        <div className="conv-list">
-          {conversations.map((c) => (
-            <button
-              key={c.id}
-              className={`conv-item${activeConvId === c.id ? " active" : ""}`}
-              onClick={() => onSelectConv(c.id)}
-            >
-              <span className="conv-title">{c.title}</span>
-              <span className="conv-meta-row">
-                <span className={`conv-channel channel-${c.channel_type}`}>{c.channel_type}</span>
+      {activeView === "help" && (
+        <div className="conv-section">
+          <div className="conv-section-header">
+            <span className="conv-section-title">Chats</span>
+            <button className="new-conv-btn" onClick={onNewConv} title="New chat">+</button>
+          </div>
+          <div className="conv-list">
+            {conversations.map((c) => (
+              <button
+                key={c.id}
+                className={`conv-item${activeConvId === c.id ? " active" : ""}`}
+                onClick={() => onSelectConv(c.id)}
+              >
+                <span className="conv-title">{c.title}</span>
                 <span className={`conv-status status-${c.session_status}`}>{c.session_status}</span>
-              </span>
-            </button>
-          ))}
-          {conversations.length === 0 && <span className="conv-empty">No chats yet</span>}
+              </button>
+            ))}
+            {conversations.length === 0 && <span className="conv-empty">No chats yet</span>}
+          </div>
         </div>
-      </div>
+      )}
     </aside>
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 const BACKEND_URL = "http://localhost:8000";
 
@@ -94,6 +95,8 @@ export default function Support() {
   const [selectedIncident, setSelectedIncident] = useState<SupportIncidentDetail | null>(null);
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [jiraOauth, setJiraOauth] = useState<{ app_configured: boolean; connected: boolean; cloud_id?: string } | null>(null);
+  const [jiraSignInBusy, setJiraSignInBusy] = useState(false);
 
   const load = async () => {
     const res = await fetch(`${BACKEND_URL}/v1/support/status`);
@@ -121,6 +124,10 @@ export default function Support() {
     const interval = setInterval(() => {
       load().catch(() => {});
     }, 4000);
+    fetch(`${BACKEND_URL}/v1/settings/jira/oauth/status`)
+      .then((r) => r.json())
+      .then(setJiraOauth)
+      .catch(() => {});
     return () => clearInterval(interval);
   }, []);
 
@@ -220,6 +227,28 @@ export default function Support() {
       </div>
 
       {error && <div className="support-error">{error}</div>}
+
+      {jiraOauth?.app_configured && !jiraOauth.connected && (
+        <div className="support-banner" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span>Connect your Jira account to create IT tickets directly from incidents.</span>
+          <button className="btn-save" disabled={jiraSignInBusy} onClick={async () => {
+            setJiraSignInBusy(true);
+            try {
+              const res = await fetch(`${BACKEND_URL}/v1/settings/jira/oauth/start`, { method: "POST" });
+              const data = await res.json();
+              if (!res.ok) throw new Error(data.detail);
+              await invoke("plugin:opener|open_url", { url: data.auth_url });
+              setTimeout(async () => {
+                const r = await fetch(`${BACKEND_URL}/v1/settings/jira/oauth/status`);
+                setJiraOauth(await r.json());
+                setJiraSignInBusy(false);
+              }, 6000);
+            } catch {
+              setJiraSignInBusy(false);
+            }
+          }}>{jiraSignInBusy ? "Opening browser…" : "Sign in with Jira"}</button>
+        </div>
+      )}
 
       <div className="support-banner">
         <strong>Watcher:</strong> {watcherLabel}

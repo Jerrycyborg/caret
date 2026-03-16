@@ -12,8 +12,8 @@ Caret is being built as:
 - a control surface for incidents, escalations, and IT ticketing
 - a lightweight packaged app with a bundled local backend and optional local model setup
 
-Caret does **not** expose Marketplace or Workflows as visible product lanes.
-Those older capabilities remain dormant in the forked codebase for stability, but the visible product is focused on device support.
+Caret keeps the visible product narrow and support-first.
+Older executor/task capabilities remain dormant in the codebase for stability, but they are not part of the current product surface.
 
 ## Visible App Surface
 
@@ -48,11 +48,11 @@ Local model support should stay optional and use an Ollama-compatible runtime on
 
 ## Fork Lineage
 
-Caret was forked from the personal Oxy baseline tag:
+Caret was forked from the preserved personal baseline:
 - `personal-oxy-baseline-v0.6.2`
 
-Oxy remains the personal/internal branch.
-Caret is the narrowed product track.
+The original Oxy repo remains the personal/internal branch.
+Caret is the org-facing product track.
 
 ## Source of Truth
 
