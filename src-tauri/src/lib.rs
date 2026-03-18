@@ -330,7 +330,7 @@ fn get_admin_status(admin_group: Option<String>) -> AdminStatus {
 #[derive(Serialize)]
 pub struct ComplianceStatus {
     pub firewall_on: bool,
-    pub bitlocker_on: bool,
+    pub bitlocker_status: String, // "on" | "off" | "unknown" (unknown = check requires elevation)
     pub active_connections: usize,
     pub recent_errors: usize,
     pub defender_enabled: bool,
@@ -358,13 +358,14 @@ fn get_compliance_status() -> ComplianceStatus {
     });
 
     std::thread::spawn(move || {
-        // manage-bde works without process elevation; Get-BitLockerVolume requires admin token
+        // All BitLocker APIs require an elevated token. Return "on"/"off"/"unknown".
+        // "unknown" is shown as an amber badge — honest, not a false "Off".
         let v = run_powershell(
-            "try { $o = (manage-bde -status C: 2>&1) -join ' '; $o -match 'Protection Status:\\s*Protection On' } catch { $false }",
+            "try { $s = (Get-BitLockerVolume -MountPoint 'C:' -ErrorAction Stop).ProtectionStatus; if ($s -eq 'On') { 'on' } else { 'off' } } catch { 'unknown' }",
         )
-        .map(|out| out.trim().to_lowercase() == "true")
-        .unwrap_or(false);
-        btx.send(v).ok();
+        .unwrap_or_else(|_| "unknown".to_string());
+        let v = v.trim().to_lowercase();
+        btx.send(if v == "on" { v } else if v == "off" { v } else { "unknown".to_string() }).ok();
     });
 
     std::thread::spawn(move || {
@@ -412,7 +413,7 @@ fn get_compliance_status() -> ComplianceStatus {
     });
 
     let firewall_on = frx.recv().unwrap_or(false);
-    let bitlocker_on = brx.recv().unwrap_or(false);
+    let bitlocker_status = brx.recv().unwrap_or_else(|_| "unknown".to_string());
     let active_connections = crx.recv().unwrap_or(0);
     let recent_errors = erx.recv().unwrap_or(0);
     let defender_enabled = drx.recv().unwrap_or(true);
@@ -421,7 +422,7 @@ fn get_compliance_status() -> ComplianceStatus {
 
     ComplianceStatus {
         firewall_on,
-        bitlocker_on,
+        bitlocker_status,
         active_connections,
         recent_errors,
         defender_enabled,

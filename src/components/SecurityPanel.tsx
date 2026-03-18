@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 interface ComplianceStatus {
   firewall_on: boolean;
-  bitlocker_on: boolean;
+  bitlocker_status: "on" | "off" | "unknown";
   active_connections: number;
   recent_errors: number;
   defender_enabled: boolean;
@@ -144,7 +144,7 @@ export default function SecurityPanel() {
           {(() => {
             const issues = [
               !compliance?.firewall_on,
-              !compliance?.bitlocker_on,
+              compliance?.bitlocker_status === "off",
               !compliance?.defender_enabled,
               compliance?.pending_reboot,
               !compliance?.spooler_running,
@@ -171,15 +171,23 @@ export default function SecurityPanel() {
               <span className={`sec-badge ${compliance?.firewall_on ? "badge-ok" : "badge-critical"}`}>{compliance?.firewall_on ? "On" : "Off"}</span>
             </div>
 
-            <div className={`sec-card ${compliance?.bitlocker_on ? "sec-ok" : "sec-critical"}`}>
+            <div className={`sec-card ${compliance?.bitlocker_status === "on" ? "sec-ok" : compliance?.bitlocker_status === "off" ? "sec-critical" : "sec-warn"}`}>
               <div className="sec-card-icon">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
               </div>
               <div className="sec-card-body">
                 <div className="sec-card-title">Disk Encryption</div>
-                <div className="sec-card-detail">{compliance?.bitlocker_on ? "BitLocker active on C:" : "Drive not encrypted — contact IT"}</div>
+                <div className="sec-card-detail">
+                  {compliance?.bitlocker_status === "on"
+                    ? "BitLocker active on C:"
+                    : compliance?.bitlocker_status === "off"
+                    ? "Drive not encrypted — contact IT"
+                    : "Status check requires elevation — run Caret as administrator to verify"}
+                </div>
               </div>
-              <span className={`sec-badge ${compliance?.bitlocker_on ? "badge-ok" : "badge-critical"}`}>{compliance?.bitlocker_on ? "Active" : "Off"}</span>
+              <span className={`sec-badge ${compliance?.bitlocker_status === "on" ? "badge-ok" : compliance?.bitlocker_status === "off" ? "badge-critical" : "badge-warn"}`}>
+                {compliance?.bitlocker_status === "on" ? "Active" : compliance?.bitlocker_status === "off" ? "Off" : "Unknown"}
+              </span>
             </div>
 
             <div className={`sec-card ${compliance?.defender_enabled ? "sec-ok" : "sec-critical"}`}>
