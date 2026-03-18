@@ -316,9 +316,24 @@ fn get_admin_status(admin_group: Option<String>) -> AdminStatus {
 
     // Check group membership via SID S-1-5-32-544 (Builtin\Administrators).
     // IsInRole() returns false for non-elevated tokens even when user IS a local admin (UAC).
-    // whoami /groups lists all groups including UAC deny-only ones — plain text search avoids
-    // ConvertFrom-Csv failures caused by mixed stderr output.
-    let script = "try { ((whoami /groups) -join ' ') -match 'S-1-5-32-544' } catch { $false }";
+    // Use absolute paths to system binaries in case PATH differs in the Caret process context.
+    // Method 1: whoami.exe /groups — includes deny-only groups (UAC-filtered token still shows admin SID)
+    // Method 2: net.exe localgroup Administrators — fallback if whoami output is empty
+    let script = r#"
+$result = $false
+try {
+    $w = & "$env:SystemRoot\System32\whoami.exe" /groups 2>&1
+    $result = [bool](($w -join ' ') -match 'S-1-5-32-544')
+} catch {}
+if (-not $result) {
+    try {
+        $me = $env:USERNAME; $dom = $env:USERDOMAIN
+        $nl = & "$env:SystemRoot\System32\net.exe" localgroup Administrators 2>&1
+        $result = [bool]($nl | Where-Object { $_ -and ($_.Trim() -eq $me -or $_.Trim() -eq "$dom\$me") })
+    } catch {}
+}
+if ($result) { 'true' } else { 'false' }
+"#;
     let is_admin = run_powershell(script)
         .map(|out| out.trim().to_lowercase() == "true")
         .unwrap_or(false);
