@@ -316,8 +316,9 @@ fn get_admin_status(admin_group: Option<String>) -> AdminStatus {
 
     // Check group membership via SID S-1-5-32-544 (Builtin\Administrators).
     // IsInRole() returns false for non-elevated tokens even when user IS a local admin (UAC).
-    // whoami /groups shows all groups including UAC-filtered ones, so SID presence = real membership.
-    let script = "try { $g = whoami /groups /fo csv 2>&1 | ConvertFrom-Csv; ($g | Where-Object { $_.SID -eq 'S-1-5-32-544' }).Count -gt 0 } catch { $false }";
+    // whoami /groups lists all groups including UAC deny-only ones — plain text search avoids
+    // ConvertFrom-Csv failures caused by mixed stderr output.
+    let script = "try { ((whoami /groups) -join ' ') -match 'S-1-5-32-544' } catch { $false }";
     let is_admin = run_powershell(script)
         .map(|out| out.trim().to_lowercase() == "true")
         .unwrap_or(false);
