@@ -352,6 +352,7 @@ pub struct ComplianceStatus {
     pub defender_enabled: bool,
     pub pending_reboot: bool,
     pub spooler_running: bool,
+    pub cert_warnings: usize,    // certs expiring within 30 days in CurrentUser\My
 }
 
 #[tauri::command]
@@ -365,6 +366,7 @@ fn get_compliance_status() -> ComplianceStatus {
     let (dtx, drx) = mpsc::channel();
     let (rtx, rrx) = mpsc::channel();
     let (stx, srx) = mpsc::channel();
+    let (certtx, certrx) = mpsc::channel();
 
     std::thread::spawn(move || {
         let v = run_command("netsh", ["advfirewall", "show", "allprofiles"])
@@ -428,6 +430,18 @@ fn get_compliance_status() -> ComplianceStatus {
         stx.send(v).ok();
     });
 
+    std::thread::spawn(move || {
+        let v = run_powershell(
+            "$w = (Get-Date).AddDays(30); \
+            (Get-ChildItem Cert:\\CurrentUser\\My -ErrorAction SilentlyContinue \
+            | Where-Object { $_.NotAfter -lt $w -and $_.NotAfter -gt (Get-Date) } \
+            | Measure-Object).Count",
+        )
+        .map(|out| out.trim().parse::<usize>().unwrap_or(0))
+        .unwrap_or(0);
+        certtx.send(v).ok();
+    });
+
     let firewall_on = frx.recv().unwrap_or(false);
     let bitlocker_status = brx.recv().unwrap_or_else(|_| "unknown".to_string());
     let active_connections = crx.recv().unwrap_or(0);
@@ -435,6 +449,7 @@ fn get_compliance_status() -> ComplianceStatus {
     let defender_enabled = drx.recv().unwrap_or(true);
     let pending_reboot = rrx.recv().unwrap_or(false);
     let spooler_running = srx.recv().unwrap_or(true);
+    let cert_warnings = certrx.recv().unwrap_or(0);
 
     ComplianceStatus {
         firewall_on,
@@ -444,6 +459,7 @@ fn get_compliance_status() -> ComplianceStatus {
         defender_enabled,
         pending_reboot,
         spooler_running,
+        cert_warnings,
     }
 }
 

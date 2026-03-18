@@ -22,6 +22,7 @@ from services.orchestrator import (
 from services.support_platform import (
     allowlisted_cleanup_targets,
     check_audio_device_errors,
+    check_expiring_certificates,
     check_onedrive_stuck,
     check_windows_defender_enabled,
     check_windows_service_running,
@@ -65,6 +66,7 @@ class SupportSnapshot:
     audio_device_errors: list = field(default_factory=list)
     onedrive_stuck: bool = False
     windows_update_age_days: int = -1
+    expiring_certs: list = field(default_factory=list)
 
 
 @dataclass
@@ -202,6 +204,7 @@ def collect_support_snapshot() -> SupportSnapshot:
     audio_device_errors = check_audio_device_errors()
     onedrive_stuck = check_onedrive_stuck()
     windows_update_age_days = check_windows_update_age_days()
+    expiring_certs = check_expiring_certificates()
     return SupportSnapshot(
         disk_used_pct=round(disk_used_pct, 2),
         cpu_load_pct=round(cpu_load_pct, 2),
@@ -217,6 +220,7 @@ def collect_support_snapshot() -> SupportSnapshot:
         audio_device_errors=audio_device_errors,
         onedrive_stuck=onedrive_stuck,
         windows_update_age_days=windows_update_age_days,
+        expiring_certs=expiring_certs,
     )
 
 
@@ -453,6 +457,24 @@ def evaluate_support_snapshot(snapshot: SupportSnapshot) -> list[SupportIssue]:
                 prompt="OneDrive appears stuck. Resetting it will stop the process and restart it cleanly without data loss.",
                 recommended_fixes=["reset OneDrive sync via Security panel", "sign out and back in to OneDrive", "check for large files blocking sync"],
                 auto_fix_kind="report_onedrive_stuck",
+            )
+        )
+
+    if snapshot.expiring_certs:
+        soonest = min(snapshot.expiring_certs, key=lambda c: c.get("DaysLeft", 999))
+        count = len(snapshot.expiring_certs)
+        days_left = soonest.get("DaysLeft", 0)
+        subject = soonest.get("Subject", "Unknown")[:60]
+        issues.append(
+            SupportIssue(
+                key="cert_expiry_warning",
+                category="certificates",
+                severity="action_required" if days_left <= 7 else "monitoring",
+                title="Certificate expiring soon",
+                summary=f"{count} certificate(s) expiring within 30 days. Soonest: '{subject}' in {days_left} day(s).",
+                prompt="A user certificate is expiring soon. Expired certificates cause VPN, email signing, and authentication failures.",
+                recommended_fixes=["contact IT to renew the certificate", "check if a new certificate has been issued and import it", "verify VPN and email signing still work after renewal"],
+                escalation_reason="Certificate renewal requires IT — user cannot self-serve cert issuance.",
             )
         )
 

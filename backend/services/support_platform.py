@@ -206,6 +206,33 @@ def check_onedrive_stuck() -> bool:
         return False
 
 
+def check_expiring_certificates(days: int = 30) -> list[dict]:
+    """Returns certs in CurrentUser\\My expiring within `days` days. Empty = all healthy."""
+    if os.name != "nt":
+        return []
+    try:
+        script = (
+            f"$w = (Get-Date).AddDays({days}); "
+            "Get-ChildItem Cert:\\CurrentUser\\My -ErrorAction SilentlyContinue "
+            "| Where-Object { $_.NotAfter -lt $w -and $_.NotAfter -gt (Get-Date) } "
+            "| Select-Object @{n='Subject';e={$_.Subject}}, @{n='Expiry';e={$_.NotAfter.ToString('yyyy-MM-dd')}}, "
+            "  @{n='DaysLeft';e={[int]($_.NotAfter - (Get-Date)).TotalDays}} "
+            "| ConvertTo-Json -Compress"
+        )
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script],
+            capture_output=True, text=True, timeout=15,
+        )
+        raw = result.stdout.strip()
+        if not raw:
+            return []
+        import json
+        data = json.loads(raw)
+        return [data] if isinstance(data, dict) else data
+    except Exception:
+        return []
+
+
 def check_windows_update_age_days() -> int:
     """Returns days since last successful Windows Update install. -1 if unknown."""
     if os.name != "nt":

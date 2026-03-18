@@ -9,6 +9,7 @@ interface ComplianceStatus {
   defender_enabled: boolean;
   pending_reboot: boolean;
   spooler_running: boolean;
+  cert_warnings: number;
 }
 
 interface AdminStatus {
@@ -159,6 +160,7 @@ export default function SecurityPanel() {
               compliance?.pending_reboot,
               !compliance?.spooler_running,
               (compliance?.recent_errors ?? 0) >= 10,
+              (compliance?.cert_warnings ?? 0) > 0,
             ].filter(Boolean).length;
             return (
               <div className={`sec-summary ${issues === 0 ? "sec-summary-ok" : issues >= 3 ? "sec-summary-critical" : "sec-summary-warn"}`}>
@@ -231,6 +233,23 @@ export default function SecurityPanel() {
                 <div className="sec-card-detail">{compliance?.spooler_running ? "Spooler service running normally" : "Spooler stopped — printing unavailable, contact IT"}</div>
               </div>
               <span className={`sec-badge ${compliance?.spooler_running ? "badge-ok" : "badge-warn"}`}>{compliance?.spooler_running ? "Running" : "Stopped"}</span>
+            </div>
+
+            <div className={`sec-card ${(compliance?.cert_warnings ?? 0) === 0 ? "sec-ok" : "sec-warn"}`}>
+              <div className="sec-card-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              </div>
+              <div className="sec-card-body">
+                <div className="sec-card-title">Certificates</div>
+                <div className="sec-card-detail">
+                  {(compliance?.cert_warnings ?? 0) === 0
+                    ? "No certificates expiring within 30 days"
+                    : `${compliance!.cert_warnings} certificate(s) expiring within 30 days — renew to avoid VPN/auth failures`}
+                </div>
+              </div>
+              <span className={`sec-badge ${(compliance?.cert_warnings ?? 0) === 0 ? "badge-ok" : "badge-warn"}`}>
+                {(compliance?.cert_warnings ?? 0) === 0 ? "OK" : `${compliance!.cert_warnings} expiring`}
+              </span>
             </div>
 
             <div
