@@ -22,7 +22,8 @@ type PrivilegedActionRequest =
   | { kind: "flush_dns" }
   | { kind: "clear_teams_cache" }
   | { kind: "reset_one_drive" }
-  | { kind: "restart_audio_devices" };
+  | { kind: "restart_audio_devices" }
+  | { kind: "run_system_repair" };
 
 interface PrivilegedActionPreview {
   action_label: string;
@@ -53,6 +54,7 @@ const ADMIN_ACTIONS: { label: string; group: string; request: PrivilegedActionRe
   { group: "Teams",     label: "Clear Teams cache",       request: { kind: "clear_teams_cache" } },
   { group: "OneDrive",  label: "Reset OneDrive sync",     request: { kind: "reset_one_drive" } },
   { group: "Devices",   label: "Restart audio devices",   request: { kind: "restart_audio_devices" } },
+  { group: "Repair",    label: "DISM + SFC system repair", request: { kind: "run_system_repair" } },
 ];
 
 export default function SecurityPanel() {
@@ -251,14 +253,25 @@ export default function SecurityPanel() {
                   ) : events.length === 0 ? (
                     <div className="sec-events-empty">No errors or warnings found.</div>
                   ) : (
-                    events.map((ev, i) => (
+                    events.map((ev, i) => {
+                      // Map known Event IDs to suggested remediation
+                      const fix: { label: string; request: PrivilegedActionRequest } | null =
+                        [55, 98].includes(ev.id) ? { label: "DISM + SFC repair", request: { kind: "run_system_repair" } }
+                        : [7026, 7000, 7001, 7023].includes(ev.id) ? { label: "DISM + SFC repair", request: { kind: "run_system_repair" } }
+                        : [7034, 7036].includes(ev.id) ? null  // service crash — no generic safe fix
+                        : null;
+                      return (
                       <div key={i} className={`sec-event-row ${ev.level === "Error" ? "sec-event-error" : "sec-event-warn"}`}>
                         <span className="sec-event-time">{ev.time}</span>
                         <span className="sec-event-level">{ev.level}</span>
                         <span className="sec-event-source">{ev.source}</span>
-                        <span className="sec-event-msg">{ev.message}</span>
+                        <span className="sec-event-msg">{ev.message}
+                          {fix && adminStatus?.is_admin && (
+                            <button className="sec-event-fix-btn" onClick={() => startAction(fix.request)}>{fix.label}</button>
+                          )}
+                        </span>
                       </div>
-                    ))
+                    )})
                   )}
                 </div>
               )}

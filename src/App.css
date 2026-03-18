@@ -1868,6 +1868,19 @@ body {
 .sec-event-warn  .sec-event-level { color: #fbbf24; }
 .sec-event-source { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sec-event-msg    { color: var(--text); line-height: 1.4; word-break: break-word; }
+.sec-event-fix-btn {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  font-size: 11px;
+  border-radius: 4px;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sec-event-fix-btn:hover { background: var(--accent); color: #fff; }
 
 .sec-grid {
   display: grid;

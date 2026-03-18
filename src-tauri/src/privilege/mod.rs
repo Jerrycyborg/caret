@@ -32,6 +32,7 @@ pub enum PrivilegedActionRequest {
     ClearTeamsCache,
     ResetOneDrive,
     RestartAudioDevices,
+    RunSystemRepair,
 }
 
 #[derive(Clone, Serialize)]
@@ -201,6 +202,16 @@ fn preview_for_action(request: &PrivilegedActionRequest) -> PrivilegedActionPrev
             platform: "windows".to_string(),
             execution_path: "in-app approval + Windows UAC prompt".to_string(),
         },
+        PrivilegedActionRequest::RunSystemRepair => PrivilegedActionPreview {
+            action_type: "run_system_repair".to_string(),
+            action_label: "Run DISM + SFC system repair".to_string(),
+            target: "Windows component store + system files".to_string(),
+            reason: "DISM /RestoreHealth repairs the Windows component store (downloads replacements from Windows Update), then SFC /scannow fixes corrupted system files. Fixes driver failures, service crashes, and NTFS errors. Requires internet. Takes 15–30 minutes — runs in a visible window you can monitor.".to_string(),
+            approval_required: true,
+            mutating: true,
+            platform: "windows".to_string(),
+            execution_path: "in-app approval + Windows UAC prompt (visible repair window)".to_string(),
+        },
     }
 }
 
@@ -306,6 +317,26 @@ fn plan_privileged_action(
             ],
             needs_elevation: false,
         }),
+        PrivilegedActionRequest::RunSystemRepair => Ok(PlannedPrivilegedCommand {
+            // Launched in a visible PowerShell window so user can monitor progress.
+            // Does NOT use -Wait or -WindowStyle Hidden — handled by execute_visible_elevated.
+            program: "powershell".to_string(),
+            args: vec![
+                "-NoProfile".to_string(),
+                "-Command".to_string(),
+                concat!(
+                    "Write-Host 'Step 1/2: Running DISM /RestoreHealth (downloads from Windows Update)...' -ForegroundColor Cyan; ",
+                    "DISM /Online /Cleanup-Image /RestoreHealth; ",
+                    "Write-Host ''; ",
+                    "Write-Host 'Step 2/2: Running SFC /scannow...' -ForegroundColor Cyan; ",
+                    "sfc /scannow; ",
+                    "Write-Host ''; ",
+                    "Write-Host 'Repair complete. A reboot is recommended.' -ForegroundColor Green; ",
+                    "Read-Host 'Press Enter to close'"
+                ).to_string(),
+            ],
+            needs_elevation: true,
+        }),
         PrivilegedActionRequest::RestartAudioDevices => Ok(PlannedPrivilegedCommand {
             program: "powershell".to_string(),
             args: vec![
@@ -355,6 +386,23 @@ fn classify_privileged_error(error: &str) -> &'static str {
     } else {
         "execution_failed"
     }
+}
+
+/// Launches the command with UAC elevation in a VISIBLE terminal window without waiting.
+/// Used for long-running tasks (DISM) where blocking the UI is not acceptable.
+fn execute_visible_elevated(command: PlannedPrivilegedCommand) -> Result<String, String> {
+    let script = format!(
+        "Start-Process -FilePath '{}' -ArgumentList @({}) -Verb RunAs",
+        escape_powershell_single_quoted(&command.program),
+        command
+            .args
+            .iter()
+            .map(|arg| format!("'{}'", escape_powershell_single_quoted(arg)))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    run_command("powershell", ["-NoProfile", "-Command", script.as_str()])?;
+    Ok("Repair launched in a separate window. Monitor progress there. Reboot when it completes.".to_string())
 }
 
 fn execute_with_platform_auth(command: PlannedPrivilegedCommand) -> Result<String, String> {
@@ -423,10 +471,10 @@ pub fn execute_privileged_action(
         }
     };
 
-    let exec_result = if planned.needs_elevation {
-        execute_with_platform_auth(planned)
-    } else {
-        run_command(&planned.program.clone(), planned.args.clone())
+    let exec_result = match &request {
+        PrivilegedActionRequest::RunSystemRepair => execute_visible_elevated(planned),
+        _ if planned.needs_elevation => execute_with_platform_auth(planned),
+        _ => run_command(&planned.program.clone(), planned.args.clone()),
     };
     match exec_result {
         Ok(message) => PrivilegedActionResult {
