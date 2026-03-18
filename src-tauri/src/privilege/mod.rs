@@ -206,12 +206,12 @@ fn preview_for_action(request: &PrivilegedActionRequest) -> PrivilegedActionPrev
         PrivilegedActionRequest::CleanDisk => PrivilegedActionPreview {
             action_type: "clean_disk".to_string(),
             action_label: "Clean disk".to_string(),
-            target: "TEMP files, Recycle Bin, Windows Temp".to_string(),
-            reason: "Removes user and system TEMP files and empties the Recycle Bin. No user documents are deleted. Requires elevation for system temp cleanup.".to_string(),
+            target: "User TEMP files and Recycle Bin".to_string(),
+            reason: "Removes your TEMP folder contents and empties the Recycle Bin. No user documents are deleted. Runs as your current user — no admin required.".to_string(),
             approval_required: true,
             mutating: true,
             platform: "windows".to_string(),
-            execution_path: "in-app approval + Windows UAC prompt".to_string(),
+            execution_path: "in-app approval — runs as current user (no UAC)".to_string(),
         },
         PrivilegedActionRequest::RunSystemRepair => PrivilegedActionPreview {
             action_type: "run_system_repair".to_string(),
@@ -360,13 +360,11 @@ fn plan_privileged_action(
                     "$freed = 0; ",
                     "try { $freed += (Get-ChildItem $env:TEMP -Recurse -Force -EA SilentlyContinue | Measure-Object -Property Length -Sum).Sum; ",
                     "  Remove-Item \"$env:TEMP\\*\" -Recurse -Force -EA SilentlyContinue } catch {}; ",
-                    "try { $freed += (Get-ChildItem 'C:\\Windows\\Temp' -Recurse -Force -EA SilentlyContinue | Measure-Object -Property Length -Sum).Sum; ",
-                    "  Remove-Item 'C:\\Windows\\Temp\\*' -Recurse -Force -EA SilentlyContinue } catch {}; ",
                     "try { Clear-RecycleBin -Force -EA SilentlyContinue } catch {}; ",
                     "$mb = [math]::Round($freed / 1MB, 1); \"Cleaned ${mb} MB of temporary files and emptied Recycle Bin.\""
                 ).to_string(),
             ],
-            needs_elevation: true,
+            needs_elevation: false,
         }),
         PrivilegedActionRequest::RestartAudioDevices => Ok(PlannedPrivilegedCommand {
             program: "powershell".to_string(),
