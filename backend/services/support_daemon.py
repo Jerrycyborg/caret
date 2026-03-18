@@ -21,6 +21,8 @@ from services.orchestrator import (
 )
 from services.support_platform import (
     allowlisted_cleanup_targets,
+    check_audio_device_errors,
+    check_onedrive_stuck,
     check_windows_defender_enabled,
     check_windows_service_running,
     check_windows_update_pending_reboot,
@@ -59,6 +61,8 @@ class SupportSnapshot:
     pending_reboot: bool = False
     spooler_running: bool = True
     defender_enabled: bool = True
+    audio_device_errors: list = field(default_factory=list)
+    onedrive_stuck: bool = False
 
 
 @dataclass
@@ -192,6 +196,8 @@ def collect_support_snapshot() -> SupportSnapshot:
     pending_reboot = check_windows_update_pending_reboot()
     spooler_running = check_windows_service_running("Spooler")
     defender_enabled = check_windows_defender_enabled()
+    audio_device_errors = check_audio_device_errors()
+    onedrive_stuck = check_onedrive_stuck()
     return SupportSnapshot(
         disk_used_pct=round(disk_used_pct, 2),
         cpu_load_pct=round(cpu_load_pct, 2),
@@ -204,6 +210,8 @@ def collect_support_snapshot() -> SupportSnapshot:
         pending_reboot=pending_reboot,
         spooler_running=spooler_running,
         defender_enabled=defender_enabled,
+        audio_device_errors=audio_device_errors,
+        onedrive_stuck=onedrive_stuck,
     )
 
 
@@ -383,6 +391,51 @@ def evaluate_support_snapshot(snapshot: SupportSnapshot) -> list[SupportIssue]:
                 recommended_fixes=["re-enable Windows Defender real-time protection", "verify a third-party AV is active and licensed", "escalate to security team if unexplained"],
                 auto_fix_kind="report_av_disabled",
                 escalation_reason="Disabled antivirus is a security incident — escalate to IT security immediately.",
+            )
+        )
+
+    if snapshot.audio_device_errors:
+        names = ", ".join(d.get("Name", "Unknown device") for d in snapshot.audio_device_errors[:2])
+        count = len(snapshot.audio_device_errors)
+        issues.append(
+            SupportIssue(
+                key="audio_device_error",
+                category="audio_drivers",
+                severity="action_required",
+                title="Audio or camera device error",
+                summary=f"{count} audio/camera device(s) reporting errors: {names}.",
+                prompt="A PnP audio or camera device has an error code. Restarting the device may restore mic, speaker, or camera function.",
+                recommended_fixes=["restart audio devices via Security panel", "check Device Manager for driver errors", "reinstall or update driver if restart fails"],
+                auto_fix_kind="report_audio_device_error",
+                escalation_reason="Driver restart requires admin elevation — use Security panel admin action or escalate to IT.",
+            )
+        )
+
+    if snapshot.onedrive_stuck:
+        issues.append(
+            SupportIssue(
+                key="onedrive_stuck",
+                category="onedrive",
+                severity="action_required",
+                title="OneDrive sync stuck",
+                summary="OneDrive is consuming excessive memory (>400 MB), which typically indicates a stuck sync operation.",
+                prompt="OneDrive appears stuck. Resetting it will stop the process and restart it cleanly without data loss.",
+                recommended_fixes=["reset OneDrive sync via Security panel", "sign out and back in to OneDrive", "check for large files blocking sync"],
+                auto_fix_kind="report_onedrive_stuck",
+            )
+        )
+
+    if snapshot.teams_cpu_pct >= 20 and snapshot.mem_used_pct >= 75:
+        issues.append(
+            SupportIssue(
+                key="teams_call_performance",
+                category="meetings",
+                severity="action_required",
+                title="Teams call performance degraded",
+                summary=f"Teams is using {snapshot.teams_cpu_pct:.0f}% CPU while system memory is at {snapshot.mem_used_pct:.0f}%. Call quality will suffer.",
+                prompt="System resources are heavily loaded during a Teams session. Clearing the Teams cache and flushing DNS typically resolves lag and dropped calls.",
+                recommended_fixes=["clear Teams cache via Security panel (no restart required)", "flush DNS", "close unused browser tabs and background apps", "restart Teams after cache clear"],
+                auto_fix_kind="report_teams_performance",
             )
         )
 

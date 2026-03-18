@@ -18,7 +18,11 @@ interface AdminStatus {
 type PrivilegedActionRequest =
   | { kind: "firewall"; enabled: boolean }
   | { kind: "service"; name: string; action: "start" | "stop" | "restart" }
-  | { kind: "terminate_process"; pid: number };
+  | { kind: "terminate_process"; pid: number }
+  | { kind: "flush_dns" }
+  | { kind: "clear_teams_cache" }
+  | { kind: "reset_one_drive" }
+  | { kind: "restart_audio_devices" };
 
 interface PrivilegedActionPreview {
   action_label: string;
@@ -42,9 +46,13 @@ interface SystemEvent {
 
 type ActionState = "idle" | "previewing" | "executing" | "done";
 
-const ADMIN_ACTIONS: { label: string; request: PrivilegedActionRequest }[] = [
-  { label: "Enable firewall",  request: { kind: "firewall", enabled: true } },
-  { label: "Disable firewall", request: { kind: "firewall", enabled: false } },
+const ADMIN_ACTIONS: { label: string; group: string; request: PrivilegedActionRequest }[] = [
+  { group: "Firewall",  label: "Enable firewall",         request: { kind: "firewall", enabled: true } },
+  { group: "Firewall",  label: "Disable firewall",        request: { kind: "firewall", enabled: false } },
+  { group: "Network",   label: "Flush DNS",               request: { kind: "flush_dns" } },
+  { group: "Teams",     label: "Clear Teams cache",       request: { kind: "clear_teams_cache" } },
+  { group: "OneDrive",  label: "Reset OneDrive sync",     request: { kind: "reset_one_drive" } },
+  { group: "Devices",   label: "Restart audio devices",   request: { kind: "restart_audio_devices" } },
 ];
 
 export default function SecurityPanel() {
@@ -279,6 +287,7 @@ export default function SecurityPanel() {
             <div className="admin-actions">
               {ADMIN_ACTIONS.map((a) => (
                 <button key={a.label} className="btn-save" onClick={() => startAction(a.request)}>
+                  <span className="admin-action-group">{a.group}</span>
                   {a.label}
                 </button>
               ))}

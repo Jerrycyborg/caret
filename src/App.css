@@ -1294,6 +1294,16 @@ body {
   font-family: var(--font-sans);
 }
 
+.admin-action-group {
+  display: block;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.6;
+  margin-bottom: 2px;
+  font-weight: 500;
+}
+
 .btn-save {
   padding: 0 16px;
   background: var(--accent);

@@ -168,6 +168,44 @@ def check_windows_defender_enabled() -> bool:
         return True  # Key absent = Defender active or 3rd-party AV managing it
 
 
+def check_audio_device_errors() -> list[dict]:
+    """Returns PnP audio/camera devices with error status. Empty list = all healthy."""
+    if os.name != "nt":
+        return []
+    try:
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command",
+             "Get-PnpDevice | Where-Object { $_.Status -eq 'Error' -and $_.Class -in @('AudioEndpoint','Media','SoundSystem','Camera','Image') } "
+             "| Select-Object Name,InstanceId,Status | ConvertTo-Json -Compress"],
+            capture_output=True, text=True, timeout=15,
+        )
+        raw = result.stdout.strip()
+        if not raw:
+            return []
+        import json
+        data = json.loads(raw)
+        return [data] if isinstance(data, dict) else data
+    except Exception:
+        return []
+
+
+def check_onedrive_stuck() -> bool:
+    """True if OneDrive is running but consuming excessive memory (>400 MB) — likely stuck."""
+    if os.name != "nt":
+        return False
+    try:
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command",
+             "$p = Get-Process -Name OneDrive -ErrorAction SilentlyContinue; "
+             "if ($p) { ($p | Measure-Object WorkingSet64 -Sum).Sum / 1MB } else { -1 }"],
+            capture_output=True, text=True, timeout=10,
+        )
+        val = float(result.stdout.strip())
+        return val > 400  # >400 MB is abnormally high for OneDrive
+    except Exception:
+        return False
+
+
 def _windows_cpu_load_pct() -> float:
     commands = [
         ["powershell", "-NoProfile", "-Command", "(Get-Counter '\\Processor(_Total)\\% Processor Time').CounterSamples[0].CookedValue"],

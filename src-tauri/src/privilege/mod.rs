@@ -28,6 +28,10 @@ pub enum PrivilegedActionRequest {
     Service { name: String, action: ServiceAction },
     UserLock { name: String, lock: bool },
     TerminateProcess { pid: u32 },
+    FlushDns,
+    ClearTeamsCache,
+    ResetOneDrive,
+    RestartAudioDevices,
 }
 
 #[derive(Clone, Serialize)]
@@ -57,6 +61,7 @@ pub struct PrivilegedActionResult {
 struct PlannedPrivilegedCommand {
     program: String,
     args: Vec<String>,
+    needs_elevation: bool,
 }
 
 fn run_command<I, S>(program: &str, args: I) -> Result<String, String>
@@ -156,6 +161,46 @@ fn preview_for_action(request: &PrivilegedActionRequest) -> PrivilegedActionPrev
             platform: "windows".to_string(),
             execution_path: "in-app approval + Windows UAC prompt".to_string(),
         },
+        PrivilegedActionRequest::FlushDns => PrivilegedActionPreview {
+            action_type: "flush_dns".to_string(),
+            action_label: "Flush DNS cache".to_string(),
+            target: "DNS resolver cache".to_string(),
+            reason: "Clears stale DNS entries. Fixes Teams, browser, and VPN connectivity issues. Requires elevation.".to_string(),
+            approval_required: true,
+            mutating: true,
+            platform: "windows".to_string(),
+            execution_path: "in-app approval + Windows UAC prompt".to_string(),
+        },
+        PrivilegedActionRequest::ClearTeamsCache => PrivilegedActionPreview {
+            action_type: "clear_teams_cache".to_string(),
+            action_label: "Clear Teams cache".to_string(),
+            target: "Microsoft Teams cache folders".to_string(),
+            reason: "Kills Teams and deletes its local cache. Fixes call lag, login loops, and rendering issues. No elevation required.".to_string(),
+            approval_required: true,
+            mutating: true,
+            platform: "windows".to_string(),
+            execution_path: "in-app approval — runs as current user (no UAC)".to_string(),
+        },
+        PrivilegedActionRequest::ResetOneDrive => PrivilegedActionPreview {
+            action_type: "reset_one_drive".to_string(),
+            action_label: "Reset OneDrive sync".to_string(),
+            target: "OneDrive process".to_string(),
+            reason: "Kills OneDrive and restarts it with /reset. Fixes stuck sync, high CPU, and repeated sign-in prompts. No elevation required.".to_string(),
+            approval_required: true,
+            mutating: true,
+            platform: "windows".to_string(),
+            execution_path: "in-app approval — runs as current user (no UAC)".to_string(),
+        },
+        PrivilegedActionRequest::RestartAudioDevices => PrivilegedActionPreview {
+            action_type: "restart_audio_devices".to_string(),
+            action_label: "Restart audio devices".to_string(),
+            target: "PnP audio and sound devices".to_string(),
+            reason: "Disables then re-enables all audio/sound PnP devices. Fixes mic not working, no audio output, and device errors. Requires elevation.".to_string(),
+            approval_required: true,
+            mutating: true,
+            platform: "windows".to_string(),
+            execution_path: "in-app approval + Windows UAC prompt".to_string(),
+        },
     }
 }
 
@@ -172,6 +217,7 @@ fn plan_privileged_action(
                 "state".to_string(),
                 if *enabled { "on" } else { "off" }.to_string(),
             ],
+            needs_elevation: true,
         }),
         PrivilegedActionRequest::Service { name, action } => {
             ensure_safe_identifier("service name", name)?;
@@ -183,6 +229,7 @@ fn plan_privileged_action(
             Ok(PlannedPrivilegedCommand {
                 program: "powershell".to_string(),
                 args: vec!["-Command".to_string(), ps],
+                needs_elevation: true,
             })
         }
         PrivilegedActionRequest::UserLock { name, lock } => {
@@ -194,11 +241,90 @@ fn plan_privileged_action(
                     name.clone(),
                     if *lock { "/active:no" } else { "/active:yes" }.to_string(),
                 ],
+                needs_elevation: true,
             })
         }
         PrivilegedActionRequest::TerminateProcess { pid } => Ok(PlannedPrivilegedCommand {
             program: "taskkill".to_string(),
             args: vec!["/PID".to_string(), pid.to_string(), "/F".to_string()],
+            needs_elevation: true,
+        }),
+        PrivilegedActionRequest::FlushDns => Ok(PlannedPrivilegedCommand {
+            program: "powershell".to_string(),
+            args: vec![
+                "-NoProfile".to_string(),
+                "-NonInteractive".to_string(),
+                "-WindowStyle".to_string(),
+                "Hidden".to_string(),
+                "-Command".to_string(),
+                "ipconfig /flushdns; ipconfig /registerdns".to_string(),
+            ],
+            needs_elevation: true,
+        }),
+        PrivilegedActionRequest::ClearTeamsCache => Ok(PlannedPrivilegedCommand {
+            program: "powershell".to_string(),
+            args: vec![
+                "-NoProfile".to_string(),
+                "-NonInteractive".to_string(),
+                "-WindowStyle".to_string(),
+                "Hidden".to_string(),
+                "-Command".to_string(),
+                concat!(
+                    "Get-Process -Name 'ms-teams','Teams' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; ",
+                    "Start-Sleep -Seconds 2; ",
+                    "$paths = @(",
+                        "\"$env:APPDATA\\Microsoft\\Teams\\Cache\",",
+                        "\"$env:APPDATA\\Microsoft\\Teams\\blob_storage\",",
+                        "\"$env:APPDATA\\Microsoft\\Teams\\databases\",",
+                        "\"$env:APPDATA\\Microsoft\\Teams\\GPUCache\",",
+                        "\"$env:APPDATA\\Microsoft\\Teams\\IndexedDB\",",
+                        "\"$env:APPDATA\\Microsoft\\Teams\\Local Storage\",",
+                        "\"$env:APPDATA\\Microsoft\\Teams\\tmp\",",
+                        "\"$env:LOCALAPPDATA\\Packages\\MSTeams_8wekyb3d8bbwe\\LocalCache\\Microsoft\\MSTeams\\EBWebView\\Default\\Cache\"",
+                    "); ",
+                    "$n=0; foreach($p in $paths){if(Test-Path $p){Remove-Item $p -Recurse -Force -ErrorAction SilentlyContinue;$n++}}; ",
+                    "\"Cleared $n Teams cache folders. Restart Teams to reconnect.\""
+                ).to_string(),
+            ],
+            needs_elevation: false,
+        }),
+        PrivilegedActionRequest::ResetOneDrive => Ok(PlannedPrivilegedCommand {
+            program: "powershell".to_string(),
+            args: vec![
+                "-NoProfile".to_string(),
+                "-NonInteractive".to_string(),
+                "-WindowStyle".to_string(),
+                "Hidden".to_string(),
+                "-Command".to_string(),
+                concat!(
+                    "Get-Process -Name 'OneDrive' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; ",
+                    "Start-Sleep -Seconds 3; ",
+                    "$od = \"$env:LOCALAPPDATA\\Microsoft\\OneDrive\\OneDrive.exe\"; ",
+                    "if(Test-Path $od){ Start-Process $od -ArgumentList '/reset'; \"OneDrive reset initiated. It will restart and re-sync automatically.\" } ",
+                    "else { \"OneDrive not found at expected path.\" }"
+                ).to_string(),
+            ],
+            needs_elevation: false,
+        }),
+        PrivilegedActionRequest::RestartAudioDevices => Ok(PlannedPrivilegedCommand {
+            program: "powershell".to_string(),
+            args: vec![
+                "-NoProfile".to_string(),
+                "-NonInteractive".to_string(),
+                "-WindowStyle".to_string(),
+                "Hidden".to_string(),
+                "-Command".to_string(),
+                concat!(
+                    "$d = Get-PnpDevice | Where-Object { $_.Class -in @(\"AudioEndpoint\",\"Media\",\"SoundSystem\") }; ",
+                    "$n=0; foreach($dev in $d){ ",
+                        "Disable-PnpDevice -InstanceId $dev.InstanceId -Confirm:$false -ErrorAction SilentlyContinue; ",
+                        "Start-Sleep -Milliseconds 500; ",
+                        "Enable-PnpDevice -InstanceId $dev.InstanceId -Confirm:$false -ErrorAction SilentlyContinue; ",
+                        "$n++ }; ",
+                    "\"Restarted $n audio device(s). Test your mic and speakers.\""
+                ).to_string(),
+            ],
+            needs_elevation: true,
         }),
     }
 }
@@ -297,7 +423,12 @@ pub fn execute_privileged_action(
         }
     };
 
-    match execute_with_platform_auth(planned) {
+    let exec_result = if planned.needs_elevation {
+        execute_with_platform_auth(planned)
+    } else {
+        run_command(&planned.program.clone(), planned.args.clone())
+    };
+    match exec_result {
         Ok(message) => PrivilegedActionResult {
             status: "executed".to_string(),
             action_type: preview.action_type,
