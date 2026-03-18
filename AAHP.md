@@ -18,6 +18,37 @@ Three pillars:
 | Security | Compliance status — firewall, BitLocker, event errors; admin-gated UAC actions |
 | Settings | Admin-only config — Jira, support policy, admin group, management server |
 
+## Session Notes (2026-03-18, cont. #3)
+- BitLocker showed "Off" even when active: `Get-BitLockerVolume` requires an elevated process token; Tauri runs non-elevated so it always caught and returned `$false`. Fixed: replaced with `manage-bde -status C:` which works without elevation.
+- Admin not detected: `IsInRole(Administrator)` checks UAC token elevation, not group membership — non-elevated admins returned false. Fixed: use `whoami /groups /fo csv | ConvertFrom-Csv` and check for SID `S-1-5-32-544` (Builtin\Administrators) which is present in the token regardless of UAC state.
+- System Events card now clickable: added `get_recent_events()` Tauri command (PowerShell pipe, pipe-delimited format); SecurityPanel fetches on first expand and shows time/level/source/message list with error/warn row colouring.
+
+## Session Notes (2026-03-18, cont. #2)
+- Settings tab redesign: Jira config card removed — Jira is IT-deployed via env vars, not per-device UI. Settings now contains only: Deployment (org), Management server, Admin group, Support policy, AI model keys.
+- Settings hidden from non-admins in sidebar nav — admin check lifted to App.tsx, passed as `isAdmin` prop to Sidebar; nav filters out Settings for regular users.
+- Incidents "Create IT ticket" now shows inline "Sign in with Jira to create ticket" button if Jira OAuth is configured but user not authenticated — no navigation to Settings needed.
+- Next: Broader auto-fix remediation classes (disk cleanup, Windows Update, DNS flush, print spooler, service restart).
+
+## Session Notes (2026-03-18, cont.)
+- Incidents tab: per-section `.support-scroll` divs had no height constraint — all subsections (Now/Monitoring/Fix Queue/Escalations/History) had tiny scroll areas. Fixed by removing `overflow-y` from `.support-scroll` and adding `overflow-y: auto` to `.support-section` — the whole panel now scrolls as one unit.
+- Security tab slowness/crash: `get_compliance_status` ran 4 system commands sequentially (~5s). Refactored to run all 4 in parallel using `std::thread::spawn` + `mpsc::channel`. Load time now ~1-2s (bounded by slowest single check). BitLocker PowerShell wrapped in `try { } catch { $false }` to prevent crash on machines without BitLocker.
+- Build rule followed: Grep-first, offset+limit reads only. AAHP+CHANGELOG updated per rule #1.
+
+## Session Notes (2026-03-18)
+- Backend sidecar was crashing on startup — litellm data files missing from PyInstaller bundle. Fixed with `--collect-submodules litellm --collect-data litellm` in `build-backend.ps1`.
+- CMD/PowerShell windows were flashing on Security tab open and backend launch — fixed with `CREATE_NO_WINDOW` on all `Command::new()` calls in Rust (no `#[cfg]` guards per build rules).
+- Home dashboard had zero CSS — all home classes were unstyled. Full Home CSS added to `App.css`.
+- Install lesson: use NSIS `/S`, not `msiexec /quiet` — MSI silently skips same-version reinstall.
+- Build artifacts moved outside OneDrive: `CARGO_TARGET_DIR=C:\Users\lawrencem\cargo-targets\caret`, PyInstaller → `C:\Users\lawrencem\caret-pyinstaller\`.
+- Rebuild needed: Rust `#[cfg]` guards were added then removed (violates Windows-only rule). Need one more full build to ship clean.
+
+## Current State (v0.2.0)
+
+- **Auto-fix expanded**: 3 new Windows health signals — Windows Update pending reboot, Print Spooler stopped, Defender disabled
+- Detection runs every 5 min via daemon; new signals create incidents, queue fixes or escalations automatically
+- Settings tab: Jira card removed — config is env-var-only (IT deploys); Settings hidden from non-admin nav
+- Jira OAuth: inline "Sign in with Jira" on incident detail pane — no Settings navigation needed
+
 ## Current State (v0.1.9)
 
 - Windows-only build — all macOS/Linux code removed from Rust layer
@@ -34,17 +65,19 @@ Three pillars:
 
 ## Next Priority
 
-1. Microsoft Copilot auth (MSAL SSO) — on hold, needs Azure AD app registration
-2. Broaden auto-fix: more remediation classes beyond `cleanup_candidates`, `diagnostics`, `readiness_refresh`
-3. Windows installer packaging with env var injection at deploy time
-4. Management server (central control plane)
+1. **Broaden auto-fix** — more remediation classes: disk cleanup, Windows Update stuck, DNS flush, print spooler reset, service restart. This is the core ticket-deflection value prop.
+2. **Better detection signals** — beyond CPU/RAM/disk: failed Windows Updates, antivirus outdated, certificate errors, RDP issues. Catch before user calls IT.
+3. **Fleet installer with env var injection** — NSIS deploy with `CARET_JIRA_*`, `CARET_ADMIN_GROUP`, `CARET_MANAGEMENT_*` pre-baked. Prerequisite for fleet rollout.
+4. **Management server** — central fleet view: device health, open incidents, patterns across machines.
+5. Microsoft Copilot auth (MSAL SSO) — on hold, needs Azure AD app registration.
 
 ## Build Rules
 
 1. Update `AAHP.md` + `CHANGELOG.md` after each meaningful change
 2. `Core_blueprint.md` and `BUILD_BLUEPRINT.md` are source of truth for product scope
 3. No feature additions beyond what is explicitly asked
-4. Read only relevant files/sections — no whole-file reads when a grep will do
+4. Read only relevant files/sections — Grep first to find the line, then Read with offset+limit. Never read whole files speculatively.
+4a. Run /compact when context is getting long.
 5. Focus on stable, shippable, working code
 
 ## Resume Chain

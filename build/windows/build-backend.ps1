@@ -13,8 +13,9 @@ function Write-Step {
 $root = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $outputPath = Join-Path $root $OutputDir
 $specPath = Join-Path $root "build/windows/pyinstaller-spec"
-$workPath = Join-Path $root "build/windows/pyinstaller-build"
-$distPath = Join-Path $root "build/windows/pyinstaller-dist"
+# Keep build artifacts outside OneDrive to avoid sync-lock errors during compilation
+$workPath = "C:\Users\$env:USERNAME\caret-pyinstaller\build"
+$distPath = "C:\Users\$env:USERNAME\caret-pyinstaller\dist"
 
 New-Item -ItemType Directory -Path $outputPath -Force | Out-Null
 New-Item -ItemType Directory -Path $specPath -Force | Out-Null
@@ -43,7 +44,8 @@ try {
     --hidden-import uvicorn.protocols.websockets.auto `
     --hidden-import uvicorn.lifespan.on `
     --hidden-import aiosqlite `
-    --hidden-import litellm `
+    --collect-submodules litellm `
+    --collect-data litellm `
     backend/windows_entry.py
 
   Copy-Item "$distPath/caret-backend.exe" "$outputPath/caret-backend.exe" -Force

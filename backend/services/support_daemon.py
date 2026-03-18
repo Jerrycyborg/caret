@@ -21,6 +21,9 @@ from services.orchestrator import (
 )
 from services.support_platform import (
     allowlisted_cleanup_targets,
+    check_windows_defender_enabled,
+    check_windows_service_running,
+    check_windows_update_pending_reboot,
     collect_cpu_load_pct,
     collect_memory_used_pct,
     count_active_connections,
@@ -53,6 +56,9 @@ class SupportSnapshot:
     camera_ready: bool = True
     printer_ready: bool = True
     background_heavy_count: int = 0
+    pending_reboot: bool = False
+    spooler_running: bool = True
+    defender_enabled: bool = True
 
 
 @dataclass
@@ -183,6 +189,9 @@ def collect_support_snapshot() -> SupportSnapshot:
     camera_ready = any(token in name for name in process_names for token in ("camera", "avfoundation", "coreaudiod", "pipewire", "wireplumber"))
     printer_ready = any(token in name for name in process_names for token in ("cups", "printer", "print"))
     active_connections = count_active_connections()
+    pending_reboot = check_windows_update_pending_reboot()
+    spooler_running = check_windows_service_running("Spooler")
+    defender_enabled = check_windows_defender_enabled()
     return SupportSnapshot(
         disk_used_pct=round(disk_used_pct, 2),
         cpu_load_pct=round(cpu_load_pct, 2),
@@ -192,6 +201,9 @@ def collect_support_snapshot() -> SupportSnapshot:
         camera_ready=camera_ready,
         printer_ready=printer_ready,
         background_heavy_count=background_heavy_count,
+        pending_reboot=pending_reboot,
+        spooler_running=spooler_running,
+        defender_enabled=defender_enabled,
     )
 
 
@@ -327,6 +339,50 @@ def evaluate_support_snapshot(snapshot: SupportSnapshot) -> list[SupportIssue]:
                 prompt="Monitor printer/network readiness and prepare diagnosis if connectivity degrades.",
                 recommended_fixes=["refresh readiness checks", "watch network-heavy apps", "inspect printer/network service availability"],
                 auto_fix_kind="refresh_readiness",
+            )
+        )
+
+    if snapshot.pending_reboot:
+        issues.append(
+            SupportIssue(
+                key="windows_update_reboot_pending",
+                category="windows_update",
+                severity="action_required",
+                title="Windows Update pending reboot",
+                summary="Windows Update or system component changes are waiting for a reboot to complete.",
+                prompt="Report Windows Update reboot pending status and advise user to schedule a restart.",
+                recommended_fixes=["save open work and restart at a convenient time", "check Windows Update history for details", "escalate if reboot has been pending more than 7 days"],
+                auto_fix_kind="report_update_pending",
+            )
+        )
+
+    if not snapshot.spooler_running:
+        issues.append(
+            SupportIssue(
+                key="print_spooler_stopped",
+                category="printing",
+                severity="action_required",
+                title="Print spooler stopped",
+                summary="The Windows Print Spooler service is not running. Printing will fail until it is restarted.",
+                prompt="Report that the Print Spooler service is stopped and advise IT to restart it via admin action.",
+                recommended_fixes=["restart the Print Spooler service (requires admin)", "clear stuck print jobs", "escalate if spooler keeps stopping"],
+                auto_fix_kind="report_spooler_stopped",
+                escalation_reason="Print Spooler restart requires elevated privileges — escalate to IT admin.",
+            )
+        )
+
+    if not snapshot.defender_enabled:
+        issues.append(
+            SupportIssue(
+                key="defender_disabled",
+                category="security",
+                severity="action_required",
+                title="Antivirus protection disabled",
+                summary="Windows Defender real-time protection appears to be disabled. Device may be unprotected.",
+                prompt="Report that real-time protection is disabled and advise IT to investigate immediately.",
+                recommended_fixes=["re-enable Windows Defender real-time protection", "verify a third-party AV is active and licensed", "escalate to security team if unexplained"],
+                auto_fix_kind="report_av_disabled",
+                escalation_reason="Disabled antivirus is a security incident — escalate to IT security immediately.",
             )
         )
 
@@ -561,6 +617,12 @@ async def run_support_fix(task_id: str) -> bool:
         result = _apply_diagnostic_fix()
     elif category in {"printer_network", "camera_audio"}:
         result = _apply_readiness_refresh_fix(category)
+    elif category == "windows_update":
+        result = _apply_update_pending_fix()
+    elif category == "printing":
+        result = _apply_spooler_stopped_fix()
+    elif category == "security":
+        result = _apply_av_disabled_fix()
     else:
         result = {
             "support_severity": "blocked",
@@ -650,13 +712,63 @@ def _auto_fix_for_issue(issue: SupportIssue) -> dict[str, str] | None:
             "queue_result": "A local readiness refresh is queued for the next daemon cycle.",
             "queue_reason": "This issue matches a deterministic, non-privileged readiness refresh.",
         }
+    if issue.auto_fix_kind == "report_update_pending":
+        return {
+            "queue_result": "Windows Update reboot status captured. User will be advised to schedule a restart.",
+            "queue_reason": "Reporting pending reboot state is safe and non-privileged.",
+        }
+    if issue.auto_fix_kind == "report_spooler_stopped":
+        return {
+            "queue_result": "Print Spooler outage logged. Escalation queued — service restart requires admin action.",
+            "queue_reason": "Detecting a stopped service is non-privileged; restart requires IT escalation.",
+        }
+    if issue.auto_fix_kind == "report_av_disabled":
+        return {
+            "queue_result": "Antivirus status captured. Escalation queued — this is a security incident requiring immediate IT review.",
+            "queue_reason": "Detecting disabled AV is non-privileged; remediation requires IT security escalation.",
+        }
     return None
+
+
+def _apply_update_pending_fix() -> dict[str, str]:
+    return {
+        "support_severity": "fixed",
+        "auto_fix_result": "Windows Update reboot is pending. User has been advised to save work and restart at a convenient time. No forced restart was performed.",
+        "next_suggested_action": "Remind the user to restart within 24 hours to complete updates.",
+        "event_type": "support_fix_completed",
+        "event_message": "Windows Update reboot-pending status reported to user.",
+        "decision_reason": "Reboot-pending status detected via registry. User notified; restart is at user discretion.",
+    }
+
+
+def _apply_spooler_stopped_fix() -> dict[str, str]:
+    return {
+        "support_severity": "escalated",
+        "auto_fix_result": "Print Spooler is stopped. An IT ticket has been flagged for admin-level service restart. Printing is unavailable until resolved.",
+        "next_suggested_action": "IT admin should restart the Spooler service and clear any stuck print jobs.",
+        "event_type": "support_escalated",
+        "event_message": "Print Spooler outage escalated to IT — service restart requires admin privileges.",
+        "decision_reason": "Stopped Print Spooler detected. Service restart requires elevated privileges; escalated to IT.",
+    }
+
+
+def _apply_av_disabled_fix() -> dict[str, str]:
+    return {
+        "support_severity": "escalated",
+        "auto_fix_result": "Windows Defender real-time protection is disabled. This has been escalated as a security incident. IT security team should investigate immediately.",
+        "next_suggested_action": "IT security should verify whether a licensed third-party AV is active or re-enable Defender.",
+        "event_type": "support_escalated",
+        "event_message": "Disabled antivirus escalated to IT security as a potential security incident.",
+        "decision_reason": "Defender real-time protection disabled — escalated immediately as per security policy.",
+    }
 
 
 def _remediation_class_for_category(category: str) -> str:
     if category == "disk":
         return "cleanup_candidates"
     if category in {"performance", "meetings"}:
+        return "diagnostics"
+    if category in {"windows_update", "printing", "security"}:
         return "diagnostics"
     return "readiness_refresh"
 

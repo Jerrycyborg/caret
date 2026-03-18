@@ -16,8 +16,10 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
+    use std::os::windows::process::CommandExt;
     let output = Command::new(program)
         .args(args)
+        .creation_flags(0x0800_0000) // CREATE_NO_WINDOW — suppress console flash
         .output()
         .map_err(|e| format!("Failed to run {program}: {e}"))?;
 
@@ -76,10 +78,12 @@ fn launch_backend_sidecar(app: &tauri::AppHandle) -> Result<(), String> {
     let path = backend_sidecar_path(app)
         .ok_or_else(|| "Bundled backend sidecar was not found in packaged resources.".to_string())?;
 
+    use std::os::windows::process::CommandExt;
     let child = Command::new(path)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
+        .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
         .spawn()
         .map_err(|e| format!("Failed to launch bundled backend sidecar: {e}"))?;
 
@@ -310,10 +314,10 @@ fn get_admin_status(admin_group: Option<String>) -> AdminStatus {
         };
     }
 
-    // Default: Windows local admin check
-    let script = "(New-Object System.Security.Principal.WindowsPrincipal(\
-        [System.Security.Principal.WindowsIdentity]::GetCurrent())\
-        ).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)";
+    // Check group membership via SID S-1-5-32-544 (Builtin\Administrators).
+    // IsInRole() returns false for non-elevated tokens even when user IS a local admin (UAC).
+    // whoami /groups shows all groups including UAC-filtered ones, so SID presence = real membership.
+    let script = "try { $g = whoami /groups /fo csv 2>&1 | ConvertFrom-Csv; ($g | Where-Object { $_.SID -eq 'S-1-5-32-544' }).Count -gt 0 } catch { $false }";
     let is_admin = run_powershell(script)
         .map(|out| out.trim().to_lowercase() == "true")
         .unwrap_or(false);
@@ -329,38 +333,142 @@ pub struct ComplianceStatus {
     pub bitlocker_on: bool,
     pub active_connections: usize,
     pub recent_errors: usize,
+    pub defender_enabled: bool,
+    pub pending_reboot: bool,
+    pub spooler_running: bool,
 }
 
 #[tauri::command]
 fn get_compliance_status() -> ComplianceStatus {
-    let firewall_on = run_command("netsh", ["advfirewall", "show", "allprofiles"])
-        .map(|out| out.lines().filter(|l| l.contains("State")).any(|l| l.contains("ON")))
+    use std::sync::mpsc;
+
+    let (ftx, frx) = mpsc::channel();
+    let (btx, brx) = mpsc::channel();
+    let (ctxc, crx) = mpsc::channel();
+    let (etx, erx) = mpsc::channel();
+    let (dtx, drx) = mpsc::channel();
+    let (rtx, rrx) = mpsc::channel();
+    let (stx, srx) = mpsc::channel();
+
+    std::thread::spawn(move || {
+        let v = run_command("netsh", ["advfirewall", "show", "allprofiles"])
+            .map(|out| out.lines().filter(|l| l.contains("State")).any(|l| l.contains("ON")))
+            .unwrap_or(false);
+        ftx.send(v).ok();
+    });
+
+    std::thread::spawn(move || {
+        // manage-bde works without process elevation; Get-BitLockerVolume requires admin token
+        let v = run_powershell(
+            "try { $o = (manage-bde -status C: 2>&1) -join ' '; $o -match 'Protection Status:\\s*Protection On' } catch { $false }",
+        )
+        .map(|out| out.trim().to_lowercase() == "true")
         .unwrap_or(false);
+        btx.send(v).ok();
+    });
 
-    let bitlocker_on = run_powershell(
-        "(Get-BitLockerVolume -MountPoint 'C:').ProtectionStatus -eq 'On'",
-    )
-    .map(|out| out.trim().to_lowercase() == "true")
-    .unwrap_or(false);
+    std::thread::spawn(move || {
+        let v = run_command("netstat", ["-an"])
+            .map(|out| out.lines().filter(|l| l.contains("ESTABLISHED")).count())
+            .unwrap_or(0);
+        ctxc.send(v).ok();
+    });
 
-    let active_connections = run_command("netstat", ["-an"])
-        .map(|out| out.lines().filter(|l| l.contains("ESTABLISHED")).count())
+    std::thread::spawn(move || {
+        let v = run_powershell(
+            "(Get-WinEvent -LogName System -MaxEvents 50 -ErrorAction SilentlyContinue \
+            | Where-Object { $_.LevelDisplayName -in 'Error','Warning' } \
+            | Measure-Object).Count",
+        )
+        .map(|out| out.trim().parse::<usize>().unwrap_or(0))
         .unwrap_or(0);
+        etx.send(v).ok();
+    });
 
-    let recent_errors = run_powershell(
-        "(Get-WinEvent -LogName System -MaxEvents 50 -ErrorAction SilentlyContinue \
-        | Where-Object { $_.LevelDisplayName -in 'Error','Warning' } \
-        | Measure-Object).Count",
-    )
-    .map(|out| out.trim().parse::<usize>().unwrap_or(0))
-    .unwrap_or(0);
+    std::thread::spawn(move || {
+        // Defender: DisableRealtimeMonitoring = 0 means enabled; key absent = enabled
+        let v = run_powershell(
+            "try { $v = (Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows Defender\\Real-Time Protection' -Name DisableRealtimeMonitoring -ErrorAction Stop).DisableRealtimeMonitoring; $v -eq 0 } catch { $true }",
+        )
+        .map(|out| out.trim().to_lowercase() == "true")
+        .unwrap_or(true);
+        dtx.send(v).ok();
+    });
+
+    std::thread::spawn(move || {
+        let v = run_powershell(
+            "((Test-Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate\\Auto Update\\RebootRequired') -or (Test-Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Component Based Servicing\\RebootPending'))",
+        )
+        .map(|out| out.trim().to_lowercase() == "true")
+        .unwrap_or(false);
+        rtx.send(v).ok();
+    });
+
+    std::thread::spawn(move || {
+        let v = run_powershell("(Get-Service -Name Spooler -ErrorAction SilentlyContinue).Status -eq 'Running'")
+            .map(|out| out.trim().to_lowercase() == "true")
+            .unwrap_or(true);
+        stx.send(v).ok();
+    });
+
+    let firewall_on = frx.recv().unwrap_or(false);
+    let bitlocker_on = brx.recv().unwrap_or(false);
+    let active_connections = crx.recv().unwrap_or(0);
+    let recent_errors = erx.recv().unwrap_or(0);
+    let defender_enabled = drx.recv().unwrap_or(true);
+    let pending_reboot = rrx.recv().unwrap_or(false);
+    let spooler_running = srx.recv().unwrap_or(true);
 
     ComplianceStatus {
         firewall_on,
         bitlocker_on,
         active_connections,
         recent_errors,
+        defender_enabled,
+        pending_reboot,
+        spooler_running,
     }
+}
+
+#[derive(Serialize)]
+pub struct SystemEvent {
+    pub time: String,
+    pub id: u32,
+    pub level: String,
+    pub source: String,
+    pub message: String,
+}
+
+#[tauri::command]
+fn get_recent_events() -> Vec<SystemEvent> {
+    let script = r#"
+        Get-WinEvent -LogName System -MaxEvents 50 -ErrorAction SilentlyContinue |
+        Where-Object { $_.LevelDisplayName -in 'Error','Warning' } |
+        Select-Object -First 25 |
+        ForEach-Object {
+            $msg = ($_.Message -replace '[|\r\n]+', ' ' -replace '\s+', ' ').Trim()
+            if ($msg.Length -gt 150) { $msg = $msg.Substring(0, 150) + '...' }
+            "$($_.TimeCreated.ToString('HH:mm'))|$($_.Id)|$($_.LevelDisplayName)|$($_.ProviderName)|$msg"
+        }
+    "#;
+    run_powershell(script)
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.splitn(5, '|').collect();
+            if parts.len() == 5 {
+                Some(SystemEvent {
+                    time: parts[0].to_string(),
+                    id: parts[1].parse().unwrap_or(0),
+                    level: parts[2].to_string(),
+                    source: parts[3].to_string(),
+                    message: parts[4].to_string(),
+                })
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -382,6 +490,7 @@ pub fn run() {
             get_home_dir,
             get_admin_status,
             get_compliance_status,
+            get_recent_events,
             preview_privileged_action,
             execute_privileged_action,
             list_plugins,

@@ -381,13 +381,37 @@ export default function Support() {
                     </button>
                   )}
                   {!selectedIncident.task.external_ticket_key && (
-                    <button
-                      className="support-action-button secondary"
-                      disabled={busyId === selectedIncident.task.id}
-                      onClick={() => createTicket(selectedIncident.task.id)}
-                    >
-                      {busyId === selectedIncident.task.id ? "Creating…" : "Create IT ticket"}
-                    </button>
+                    jiraOauth?.app_configured && !jiraOauth.connected ? (
+                      <button
+                        className="support-action-button secondary"
+                        disabled={jiraSignInBusy}
+                        onClick={async () => {
+                          setJiraSignInBusy(true);
+                          try {
+                            const res = await fetch(`${BACKEND_URL}/v1/settings/jira/oauth/start`, { method: "POST" });
+                            const data = await res.json();
+                            if (!res.ok) throw new Error(data.detail ?? "Failed");
+                            await invoke("plugin:opener|open_url", { url: data.auth_url });
+                            setTimeout(async () => {
+                              const r = await fetch(`${BACKEND_URL}/v1/settings/jira/oauth/status`);
+                              setJiraOauth(await r.json());
+                            }, 6000);
+                          } finally {
+                            setJiraSignInBusy(false);
+                          }
+                        }}
+                      >
+                        {jiraSignInBusy ? "Opening browser…" : "Sign in with Jira to create ticket"}
+                      </button>
+                    ) : (
+                      <button
+                        className="support-action-button secondary"
+                        disabled={busyId === selectedIncident.task.id}
+                        onClick={() => createTicket(selectedIncident.task.id)}
+                      >
+                        {busyId === selectedIncident.task.id ? "Creating…" : "Create IT ticket"}
+                      </button>
+                    )
                   )}
                 </div>
               </div>

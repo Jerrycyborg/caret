@@ -64,8 +64,10 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
+    use std::os::windows::process::CommandExt;
     let output = Command::new(program)
         .args(args)
+        .creation_flags(0x0800_0000) // CREATE_NO_WINDOW — suppress console flash
         .output()
         .map_err(|e| format!("Failed to run {program}: {e}"))?;
 
@@ -231,7 +233,7 @@ fn classify_privileged_error(error: &str) -> &'static str {
 
 fn execute_with_platform_auth(command: PlannedPrivilegedCommand) -> Result<String, String> {
     let script = format!(
-        "$p = Start-Process -FilePath '{}' -ArgumentList @({}) -Verb RunAs -Wait -PassThru; Write-Output $p.ExitCode",
+        "$p = Start-Process -FilePath '{}' -ArgumentList @({}) -Verb RunAs -WindowStyle Hidden -Wait -PassThru; Write-Output $p.ExitCode",
         escape_powershell_single_quoted(&command.program),
         command
             .args

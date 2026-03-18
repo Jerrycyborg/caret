@@ -119,6 +119,55 @@ def allowlisted_cleanup_targets() -> list[Path]:
     return [path for path in candidates if path.exists()]
 
 
+def check_windows_update_pending_reboot() -> bool:
+    """True if Windows Update or CBS is waiting for a reboot (registry key exists)."""
+    if os.name != "nt":
+        return False
+    import winreg
+    reboot_keys = [
+        r"SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired",
+        r"SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending",
+    ]
+    for subkey in reboot_keys:
+        try:
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, subkey):
+                return True
+        except OSError:
+            continue
+    try:
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\Session Manager") as key:
+            val, _ = winreg.QueryValueEx(key, "PendingFileRenameOperations")
+            if val:
+                return True
+    except OSError:
+        pass
+    return False
+
+
+def check_windows_service_running(service_name: str) -> bool:
+    """True if the named Windows service is in RUNNING state. Defaults True on error to avoid false positives."""
+    if os.name != "nt":
+        return True
+    try:
+        result = subprocess.run(["sc", "query", service_name], capture_output=True, text=True, timeout=5)
+        return "RUNNING" in result.stdout
+    except Exception:
+        return True
+
+
+def check_windows_defender_enabled() -> bool:
+    """True if Windows Defender real-time protection is enabled (DisableRealtimeMonitoring == 0 or absent)."""
+    if os.name != "nt":
+        return True
+    import winreg
+    try:
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows Defender\Real-Time Protection") as key:
+            val, _ = winreg.QueryValueEx(key, "DisableRealtimeMonitoring")
+            return val == 0
+    except OSError:
+        return True  # Key absent = Defender active or 3rd-party AV managing it
+
+
 def _windows_cpu_load_pct() -> float:
     commands = [
         ["powershell", "-NoProfile", "-Command", "(Get-Counter '\\Processor(_Total)\\% Processor Time').CounterSamples[0].CookedValue"],
