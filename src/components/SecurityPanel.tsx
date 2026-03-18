@@ -47,14 +47,12 @@ interface SystemEvent {
 
 type ActionState = "idle" | "previewing" | "executing" | "done";
 
-const ADMIN_ACTIONS: { label: string; group: string; request: PrivilegedActionRequest }[] = [
-  { group: "Firewall",  label: "Enable firewall",         request: { kind: "firewall", enabled: true } },
-  { group: "Firewall",  label: "Disable firewall",        request: { kind: "firewall", enabled: false } },
-  { group: "Network",   label: "Flush DNS",               request: { kind: "flush_dns" } },
-  { group: "Teams",     label: "Clear Teams cache",       request: { kind: "clear_teams_cache" } },
-  { group: "OneDrive",  label: "Reset OneDrive sync",     request: { kind: "reset_one_drive" } },
-  { group: "Devices",   label: "Restart audio devices",   request: { kind: "restart_audio_devices" } },
-  { group: "Repair",    label: "DISM + SFC system repair", request: { kind: "run_system_repair" } },
+const ADMIN_ACTIONS: { label: string; group: string; icon: string; request: PrivilegedActionRequest }[] = [
+  { group: "Network",  icon: "🌐", label: "Flush DNS",            request: { kind: "flush_dns" } },
+  { group: "Teams",    icon: "💬", label: "Clear Teams cache",    request: { kind: "clear_teams_cache" } },
+  { group: "OneDrive", icon: "☁️", label: "Reset OneDrive sync",  request: { kind: "reset_one_drive" } },
+  { group: "Devices",  icon: "🔊", label: "Restart audio devices", request: { kind: "restart_audio_devices" } },
+  { group: "Repair",   icon: "🛠️", label: "DISM + SFC repair",    request: { kind: "run_system_repair" } },
 ];
 
 export default function SecurityPanel() {
@@ -299,11 +297,19 @@ export default function SecurityPanel() {
           {actionState === "idle" && (
             <div className="admin-actions">
               {ADMIN_ACTIONS.map((a) => (
-                <button key={a.label} className="btn-save" onClick={() => startAction(a.request)}>
-                  <span className="admin-action-group">{a.group}</span>
-                  {a.label}
+                <button key={a.label} className="admin-action-btn" onClick={() => startAction(a.request)}>
+                  <span className="aab-group">{a.group}</span>
+                  <span className="aab-icon">{a.icon}</span>
+                  <span className="aab-label">{a.label}</span>
                 </button>
               ))}
+              {compliance && (
+                <button className="admin-action-btn" onClick={() => startAction({ kind: "firewall", enabled: !compliance.firewall_on })}>
+                  <span className="aab-group">Firewall</span>
+                  <span className="aab-icon">🛡️</span>
+                  <span className="aab-label">{compliance.firewall_on ? "Disable firewall" : "Enable firewall"}</span>
+                </button>
+              )}
             </div>
           )}
 

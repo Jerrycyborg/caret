@@ -17,6 +17,16 @@ function App() {
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [sidebarKey, setSidebarKey] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [theme, setTheme] = useState<"dark" | "light">(() =>
+    (localStorage.getItem("caret-theme") as "dark" | "light") ?? "dark"
+  );
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem("caret-theme", theme);
+  }, [theme]);
+
+  const toggleTheme = useCallback(() => setTheme(t => t === "dark" ? "light" : "dark"), []);
 
   useEffect(() => {
     fetch(`${BACKEND_URL}/v1/settings/config`)
@@ -54,6 +64,8 @@ function App() {
         }}
         refreshKey={sidebarKey}
         isAdmin={isAdmin}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
       <main className="main-content">
         {view === "home" && (
