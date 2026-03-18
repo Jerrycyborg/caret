@@ -25,6 +25,7 @@ from services.support_platform import (
     check_onedrive_stuck,
     check_windows_defender_enabled,
     check_windows_service_running,
+    check_windows_update_age_days,
     check_windows_update_pending_reboot,
     collect_cpu_load_pct,
     collect_memory_used_pct,
@@ -63,6 +64,7 @@ class SupportSnapshot:
     defender_enabled: bool = True
     audio_device_errors: list = field(default_factory=list)
     onedrive_stuck: bool = False
+    windows_update_age_days: int = -1
 
 
 @dataclass
@@ -182,8 +184,9 @@ async def support_daemon_status() -> dict[str, Any]:
 
 
 def collect_support_snapshot() -> SupportSnapshot:
-    home_usage = shutil.disk_usage(Path.home())
-    disk_used_pct = ((home_usage.total - home_usage.free) / home_usage.total * 100.0) if home_usage.total else 0.0
+    _disk_root = "C:\\" if os.name == "nt" else Path.home()
+    _disk = shutil.disk_usage(_disk_root)
+    disk_used_pct = ((_disk.total - _disk.free) / _disk.total * 100.0) if _disk.total else 0.0
     cpu_load_pct = collect_cpu_load_pct()
     mem_used_pct = collect_memory_used_pct()
     processes = read_processes()
@@ -198,6 +201,7 @@ def collect_support_snapshot() -> SupportSnapshot:
     defender_enabled = check_windows_defender_enabled()
     audio_device_errors = check_audio_device_errors()
     onedrive_stuck = check_onedrive_stuck()
+    windows_update_age_days = check_windows_update_age_days()
     return SupportSnapshot(
         disk_used_pct=round(disk_used_pct, 2),
         cpu_load_pct=round(cpu_load_pct, 2),
@@ -212,6 +216,7 @@ def collect_support_snapshot() -> SupportSnapshot:
         defender_enabled=defender_enabled,
         audio_device_errors=audio_device_errors,
         onedrive_stuck=onedrive_stuck,
+        windows_update_age_days=windows_update_age_days,
     )
 
 
@@ -361,6 +366,32 @@ def evaluate_support_snapshot(snapshot: SupportSnapshot) -> list[SupportIssue]:
                 prompt="Report Windows Update reboot pending status and advise user to schedule a restart.",
                 recommended_fixes=["save open work and restart at a convenient time", "check Windows Update history for details", "escalate if reboot has been pending more than 7 days"],
                 auto_fix_kind="report_update_pending",
+            )
+        )
+
+    if snapshot.windows_update_age_days >= 30:
+        issues.append(
+            SupportIssue(
+                key="windows_update_stale",
+                category="windows_update",
+                severity="action_required",
+                title="Windows Update overdue",
+                summary=f"Last successful Windows Update was {snapshot.windows_update_age_days} days ago.",
+                prompt="Windows has not been updated in over 30 days. Advise the user to run Windows Update to receive security patches.",
+                recommended_fixes=["open Windows Update and install available updates", "schedule a maintenance window for reboots", "escalate if updates are blocked by policy"],
+                auto_fix_kind="report_update_pending",
+            )
+        )
+    elif 0 <= snapshot.windows_update_age_days >= 14:
+        issues.append(
+            SupportIssue(
+                key="windows_update_stale",
+                category="windows_update",
+                severity="monitoring",
+                title="Windows Update due soon",
+                summary=f"Last successful Windows Update was {snapshot.windows_update_age_days} days ago.",
+                prompt="Monitor — Windows updates are due within the next two weeks.",
+                recommended_fixes=["run Windows Update when convenient"],
             )
         )
 

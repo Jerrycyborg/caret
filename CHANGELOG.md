@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.2.0 — Admin Actions + Theme + Detection Signals (2026-03-18, cont. #4)
+
+### Bug Fixes
+- `src-tauri/src/lib.rs`: Admin detection fixed again — uses absolute path `$env:SystemRoot\System32\whoami.exe` + fallback via `net localgroup Administrators` matching both local and domain-prefixed names (`ADS\username`)
+- `backend/services/support_daemon.py`: Disk usage now checks `C:\` instead of `Path.home()` — gives accurate system drive stats on Windows
+
+### UI
+- `src/App.css`: Light theme added (`[data-theme="light"]` CSS variables); sidebar footer + theme toggle button styles
+- `src/App.tsx`: Theme state with localStorage persistence; applies `data-theme` to `<html>`
+- `src/components/Sidebar.tsx`: Theme toggle button (sun/moon) in sidebar footer
+- `src/components/SecurityPanel.tsx`: Admin action buttons redesigned as 3-column card grid (icon + group label + name); removed double firewall buttons, replaced with single contextual card
+- `index.html`: Title fixed from "Oxy" to "Caret"; favicon updated to custom SVG icon
+- `src/caret-icon.svg`: New Caret SVG favicon (purple gradient diamond)
+- `src-tauri/icons/`: All platform icon sizes regenerated from custom 1024×1024 PNG source
+
+### New Admin Actions
+- `src-tauri/src/privilege/mod.rs`: `CleanDisk` action — deletes user TEMP, `C:\Windows\Temp`, empties Recycle Bin via UAC; reports freed MB
+- `src/components/SecurityPanel.tsx`: "Clean disk" card added to admin grid; contextual "Restart Print Spooler" card appears only when spooler is stopped
+
+### New Detection Signal
+- `backend/services/support_platform.py`: `check_windows_update_age_days()` — reads `LastSuccessTime` from Windows Update registry key
+- `backend/services/support_daemon.py`: `windows_update_age_days` field in `SupportSnapshot`; `windows_update_stale` signal at ≥30 days (action_required) and ≥14 days (monitoring)
+
 ## 0.2.0 — Security Bug Fixes + System Events Drill-down (2026-03-18, cont. #3)
 
 ### Bug Fixes — Security Panel

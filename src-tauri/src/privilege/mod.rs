@@ -33,6 +33,7 @@ pub enum PrivilegedActionRequest {
     ResetOneDrive,
     RestartAudioDevices,
     RunSystemRepair,
+    CleanDisk,
 }
 
 #[derive(Clone, Serialize)]
@@ -202,6 +203,16 @@ fn preview_for_action(request: &PrivilegedActionRequest) -> PrivilegedActionPrev
             platform: "windows".to_string(),
             execution_path: "in-app approval + Windows UAC prompt".to_string(),
         },
+        PrivilegedActionRequest::CleanDisk => PrivilegedActionPreview {
+            action_type: "clean_disk".to_string(),
+            action_label: "Clean disk".to_string(),
+            target: "TEMP files, Recycle Bin, Windows Temp".to_string(),
+            reason: "Removes user and system TEMP files and empties the Recycle Bin. No user documents are deleted. Requires elevation for system temp cleanup.".to_string(),
+            approval_required: true,
+            mutating: true,
+            platform: "windows".to_string(),
+            execution_path: "in-app approval + Windows UAC prompt".to_string(),
+        },
         PrivilegedActionRequest::RunSystemRepair => PrivilegedActionPreview {
             action_type: "run_system_repair".to_string(),
             action_label: "Run DISM + SFC system repair".to_string(),
@@ -333,6 +344,26 @@ fn plan_privileged_action(
                     "Write-Host ''; ",
                     "Write-Host 'Repair complete. A reboot is recommended.' -ForegroundColor Green; ",
                     "Read-Host 'Press Enter to close'"
+                ).to_string(),
+            ],
+            needs_elevation: true,
+        }),
+        PrivilegedActionRequest::CleanDisk => Ok(PlannedPrivilegedCommand {
+            program: "powershell".to_string(),
+            args: vec![
+                "-NoProfile".to_string(),
+                "-NonInteractive".to_string(),
+                "-WindowStyle".to_string(),
+                "Hidden".to_string(),
+                "-Command".to_string(),
+                concat!(
+                    "$freed = 0; ",
+                    "try { $freed += (Get-ChildItem $env:TEMP -Recurse -Force -EA SilentlyContinue | Measure-Object -Property Length -Sum).Sum; ",
+                    "  Remove-Item \"$env:TEMP\\*\" -Recurse -Force -EA SilentlyContinue } catch {}; ",
+                    "try { $freed += (Get-ChildItem 'C:\\Windows\\Temp' -Recurse -Force -EA SilentlyContinue | Measure-Object -Property Length -Sum).Sum; ",
+                    "  Remove-Item 'C:\\Windows\\Temp\\*' -Recurse -Force -EA SilentlyContinue } catch {}; ",
+                    "try { Clear-RecycleBin -Force -EA SilentlyContinue } catch {}; ",
+                    "$mb = [math]::Round($freed / 1MB, 1); \"Cleaned ${mb} MB of temporary files and emptied Recycle Bin.\""
                 ).to_string(),
             ],
             needs_elevation: true,

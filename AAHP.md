@@ -18,6 +18,17 @@ Three pillars:
 | Security | Compliance status — firewall, BitLocker, event errors; admin-gated UAC actions |
 | Settings | Admin-only config — Jira, support policy, admin group, management server |
 
+## Session Notes (2026-03-18, cont. #4)
+- Admin detection still failing after whoami SID fix: root cause was PATH — `whoami` in Caret process resolved to wrong binary. Fixed by using `$env:SystemRoot\System32\whoami.exe` absolute path + fallback via `net localgroup Administrators` checking both local and domain-prefixed username (`ADS\lawrencem`).
+- Dark/light theme toggle added to sidebar footer (sun/moon icon, persists via localStorage).
+- Favicon replaced — custom SVG icon (purple gradient diamond) generated via Python PIL + `tauri icon` CLI; title fixed from "Oxy" to "Caret".
+- Admin actions redesigned: flat button row → 3-column card grid with group label + icon + name.
+- Double firewall buttons removed; replaced with single contextual card (shows "Disable" when on, "Enable" when off).
+- Added CleanDisk admin action: deletes user TEMP, Windows\Temp, empties Recycle Bin — via UAC elevation.
+- Added contextual "Restart Print Spooler" card — only appears when spooler is stopped.
+- Fixed disk usage check to use C:\ (was using Path.home() which is misleading on Windows).
+- Added Windows Update age detection: checks `LastSuccessTime` registry key; signals `windows_update_stale` at ≥30 days (action_required) and ≥14 days (monitoring).
+
 ## Session Notes (2026-03-18, cont. #3)
 - BitLocker showed "Off" even when active: `Get-BitLockerVolume` requires an elevated process token; Tauri runs non-elevated so it always caught and returned `$false`. Fixed: replaced with `manage-bde -status C:` which works without elevation.
 - Admin not detected: `IsInRole(Administrator)` checks UAC token elevation, not group membership — non-elevated admins returned false. Fixed: use `whoami /groups /fo csv | ConvertFrom-Csv` and check for SID `S-1-5-32-544` (Builtin\Administrators) which is present in the token regardless of UAC state.
@@ -65,11 +76,10 @@ Three pillars:
 
 ## Next Priority
 
-1. **Broaden auto-fix** — more remediation classes: disk cleanup, Windows Update stuck, DNS flush, print spooler reset, service restart. This is the core ticket-deflection value prop.
-2. **Better detection signals** — beyond CPU/RAM/disk: failed Windows Updates, antivirus outdated, certificate errors, RDP issues. Catch before user calls IT.
-3. **Fleet installer with env var injection** — NSIS deploy with `CARET_JIRA_*`, `CARET_ADMIN_GROUP`, `CARET_MANAGEMENT_*` pre-baked. Prerequisite for fleet rollout.
-4. **Management server** — central fleet view: device health, open incidents, patterns across machines.
-5. Microsoft Copilot auth (MSAL SSO) — on hold, needs Azure AD app registration.
+1. **Better detection signals** — certificate errors (expiring certs in user store), RDP issues, proxy/SSL intercept detection. Catch before user calls IT.
+2. **Fleet installer with env var injection** — NSIS deploy with `CARET_JIRA_*`, `CARET_ADMIN_GROUP`, `CARET_MANAGEMENT_*` pre-baked. Prerequisite for fleet rollout.
+3. **Management server** — central fleet view: device health, open incidents, patterns across machines.
+4. Microsoft Copilot auth (MSAL SSO) — on hold, needs Azure AD app registration.
 
 ## Build Rules
 

@@ -206,6 +206,22 @@ def check_onedrive_stuck() -> bool:
         return False
 
 
+def check_windows_update_age_days() -> int:
+    """Returns days since last successful Windows Update install. -1 if unknown."""
+    if os.name != "nt":
+        return -1
+    import winreg
+    try:
+        key_path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\Results\Install"
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path) as key:
+            val, _ = winreg.QueryValueEx(key, "LastSuccessTime")
+            from datetime import datetime, timezone
+            last = datetime.strptime(str(val).strip(), "%Y-%m-%d %H:%M:%S")
+            return (datetime.now() - last).days
+    except Exception:
+        return -1
+
+
 def _windows_cpu_load_pct() -> float:
     commands = [
         ["powershell", "-NoProfile", "-Command", "(Get-Counter '\\Processor(_Total)\\% Processor Time').CounterSamples[0].CookedValue"],

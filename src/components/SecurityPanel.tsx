@@ -23,7 +23,8 @@ type PrivilegedActionRequest =
   | { kind: "clear_teams_cache" }
   | { kind: "reset_one_drive" }
   | { kind: "restart_audio_devices" }
-  | { kind: "run_system_repair" };
+  | { kind: "run_system_repair" }
+  | { kind: "clean_disk" };
 
 interface PrivilegedActionPreview {
   action_label: string;
@@ -52,6 +53,7 @@ const ADMIN_ACTIONS: { label: string; group: string; icon: string; request: Priv
   { group: "Teams",    icon: "💬", label: "Clear Teams cache",    request: { kind: "clear_teams_cache" } },
   { group: "OneDrive", icon: "☁️", label: "Reset OneDrive sync",  request: { kind: "reset_one_drive" } },
   { group: "Devices",  icon: "🔊", label: "Restart audio devices", request: { kind: "restart_audio_devices" } },
+  { group: "Disk",     icon: "🧹", label: "Clean disk",           request: { kind: "clean_disk" } },
   { group: "Repair",   icon: "🛠️", label: "DISM + SFC repair",    request: { kind: "run_system_repair" } },
 ];
 
@@ -308,6 +310,13 @@ export default function SecurityPanel() {
                   <span className="aab-group">Firewall</span>
                   <span className="aab-icon">🛡️</span>
                   <span className="aab-label">{compliance.firewall_on ? "Disable firewall" : "Enable firewall"}</span>
+                </button>
+              )}
+              {compliance && !compliance.spooler_running && (
+                <button className="admin-action-btn" onClick={() => startAction({ kind: "service", name: "Spooler", action: "restart" })}>
+                  <span className="aab-group">Printing</span>
+                  <span className="aab-icon">🖨️</span>
+                  <span className="aab-label">Restart Print Spooler</span>
                 </button>
               )}
             </div>
