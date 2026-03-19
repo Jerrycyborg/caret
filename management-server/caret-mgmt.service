@@ -1,0 +1,20 @@
+[Unit]
+Description=Caret Management Server
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/caret-mgmt
+ExecStart=/opt/caret-mgmt/venv/bin/uvicorn server:app --host 127.0.0.1 --port 8100
+Restart=always
+RestartSec=5
+
+# Secrets — edit these before installing
+Environment=CARET_MANAGEMENT_TOKEN=change-this-secret-token
+Environment=CARET_ROOT_PATH=/admin
+Environment=CARET_DB_PATH=/opt/caret-mgmt/fleet.db
+Environment=CARET_SERVER_PORT=8100
+
+[Install]
+WantedBy=multi-user.target

@@ -32,8 +32,9 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 TOKEN = os.environ.get("CARET_MANAGEMENT_TOKEN", "").strip()
 DB_PATH = Path(os.environ.get("CARET_DB_PATH", "fleet.db"))
 PORT = int(os.environ.get("CARET_SERVER_PORT", "8100"))
+ROOT_PATH = os.environ.get("CARET_ROOT_PATH", "")  # e.g. "/admin" when behind reverse proxy
 
-app = FastAPI(title="Caret Management Server", version="1.0.0")
+app = FastAPI(title="Caret Management Server", version="1.0.0", root_path=ROOT_PATH)
 _bearer = HTTPBearer(auto_error=False)
 
 # ---------------------------------------------------------------------------
