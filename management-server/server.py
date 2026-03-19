@@ -60,6 +60,10 @@ def _init_db() -> None:
                 payload     TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_checkins_host ON checkins(hostname);
+            CREATE TABLE IF NOT EXISTS fleet_config (
+                key     TEXT PRIMARY KEY,
+                value   TEXT
+            );
         """)
 
 
@@ -101,6 +105,44 @@ def _device_status(last_seen_iso: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Fleet config helpers
+# ---------------------------------------------------------------------------
+_CONFIG_KEYS = {
+    "org_name", "environment_label",
+    "jira_project_key", "jira_issue_type",
+    "jira_oauth_client_id", "jira_oauth_client_secret",
+    "jira_base_url",
+    "admin_group",
+    "management_token",
+}
+
+# Keys that should NEVER be sent back to devices (secrets stay server-side)
+_SECRET_KEYS = {"jira_oauth_client_secret", "management_token"}
+
+
+def _get_fleet_config() -> dict[str, str]:
+    with _db() as con:
+        rows = con.execute("SELECT key, value FROM fleet_config").fetchall()
+    return {r["key"]: r["value"] for r in rows}
+
+
+def _set_fleet_config(updates: dict[str, str]) -> None:
+    with _db() as con:
+        for k, v in updates.items():
+            if k not in _CONFIG_KEYS:
+                continue
+            if v:
+                con.execute("INSERT INTO fleet_config (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (k, v))
+            else:
+                con.execute("DELETE FROM fleet_config WHERE key=?", (k,))
+
+
+def _client_config(cfg: dict[str, str]) -> dict[str, str]:
+    """Config subset safe to push to devices (no secrets)."""
+    return {k: v for k, v in cfg.items() if k not in _SECRET_KEYS and v}
+
+
+# ---------------------------------------------------------------------------
 # Routes — API
 # ---------------------------------------------------------------------------
 @app.post("/v1/devices/checkin", dependencies=[Depends(_check_auth)])
@@ -135,7 +177,28 @@ async def checkin(request: Request) -> dict:
             "INSERT INTO checkins (hostname, ts, payload) VALUES (?, ?, ?)",
             (hostname, ts, json.dumps(body)),
         )
-    return {"ok": True}
+    return {"ok": True, "config": _client_config(_get_fleet_config())}
+
+
+@app.get("/v1/config", dependencies=[Depends(_check_auth)])
+def get_config() -> dict:
+    cfg = _get_fleet_config()
+    # Mask secrets in response
+    masked = {}
+    for k, v in cfg.items():
+        if k in _SECRET_KEYS and v:
+            masked[k] = v[:4] + "****" if len(v) > 8 else "****"
+        else:
+            masked[k] = v
+    return {"config": masked}
+
+
+@app.put("/v1/config", dependencies=[Depends(_check_auth)])
+async def set_config(request: Request) -> dict:
+    body = await request.json()
+    updates = {k: str(v).strip() for k, v in body.items() if isinstance(v, str)}
+    _set_fleet_config(updates)
+    return {"ok": True, "keys_updated": list(updates.keys())}
 
 
 @app.get("/v1/devices", dependencies=[Depends(_check_auth)])
@@ -262,6 +325,18 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
   </table>
 </div>
 
+<div style="padding:0 24px 32px">
+  <div class="section-title" style="padding-left:0">FLEET CONFIGURATION</div>
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;max-width:700px">
+    <p style="color:var(--muted);font-size:12px;margin-bottom:16px">Set once here — pushed to all devices on their next checkin (every 60s). Secrets are stored server-side and never returned in full.</p>
+    <div id="cfg-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"></div>
+    <div style="margin-top:14px;display:flex;align-items:center;gap:12px">
+      <button onclick="saveConfig()" style="background:var(--purple);color:#fff;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;font-size:13px">Save &amp; push to fleet</button>
+      <span id="cfg-msg" style="font-size:12px"></span>
+    </div>
+  </div>
+</div>
+
 <script>
 const TOKEN = localStorage.getItem('caret_mgmt_token') || '';
 
@@ -328,6 +403,64 @@ async function refresh() {
 
 refresh();
 setInterval(refresh, 30000);
+
+// ---------------------------------------------------------------------------
+// Config panel
+// ---------------------------------------------------------------------------
+const CONFIG_FIELDS = [
+  { key: 'org_name',                label: 'Org name',                  placeholder: 'Acme Corp',                          secret: false },
+  { key: 'environment_label',       label: 'Environment label',         placeholder: 'Production',                         secret: false },
+  { key: 'admin_group',             label: 'Admin group (AD SAM)',       placeholder: 'ROL-ADM-Admins',                     secret: false },
+  { key: 'jira_project_key',        label: 'Jira project key',          placeholder: 'IT',                                 secret: false },
+  { key: 'jira_issue_type',         label: 'Jira issue type',           placeholder: 'Task',                               secret: false },
+  { key: 'jira_oauth_client_id',    label: 'Jira OAuth client ID',      placeholder: 'From developer.atlassian.com',       secret: false },
+  { key: 'jira_oauth_client_secret',label: 'Jira OAuth client secret',  placeholder: 'Write-only — stored securely',       secret: true  },
+  { key: 'jira_base_url',           label: 'Jira base URL (basic auth)',  placeholder: 'https://your-org.atlassian.net',    secret: false },
+];
+
+async function loadConfig() {
+  const data = await api('/v1/config');
+  if (!data) return;
+  const cfg = data.config || {};
+  CONFIG_FIELDS.forEach(f => {
+    const el = document.getElementById('cfg_' + f.key);
+    if (el && !f.secret) el.value = cfg[f.key] || '';
+    if (el && f.secret && cfg[f.key]) el.placeholder = cfg[f.key]; // show masked value
+  });
+}
+
+async function saveConfig() {
+  const body = {};
+  CONFIG_FIELDS.forEach(f => {
+    const el = document.getElementById('cfg_' + f.key);
+    if (el && el.value.trim()) body[f.key] = el.value.trim();
+  });
+  const res = await fetch('/v1/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...(TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {}) },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  const msg = document.getElementById('cfg-msg');
+  msg.textContent = res.ok ? `Saved (${data.keys_updated?.length ?? 0} keys). Devices will receive config on next checkin.` : 'Save failed.';
+  msg.style.color = res.ok ? 'var(--green)' : 'var(--red)';
+  setTimeout(() => msg.textContent = '', 5000);
+  if (res.ok) loadConfig();
+}
+
+// Build config form from CONFIG_FIELDS
+(function() {
+  const grid = document.getElementById('cfg-grid');
+  CONFIG_FIELDS.forEach(f => {
+    const div = document.createElement('div');
+    div.innerHTML = `<label style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">${f.label}</label>`
+      + `<input id="cfg_${f.key}" type="${f.secret ? 'password' : 'text'}" placeholder="${f.placeholder}" `
+      + `style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:13px">`;
+    grid.appendChild(div);
+  });
+})();
+
+loadConfig();
 </script>
 </body>
 </html>
