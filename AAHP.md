@@ -18,16 +18,17 @@ Three pillars:
 | Security | Compliance status — firewall, BitLocker, event errors; admin-gated UAC actions |
 | Settings | Admin-only config — Jira, support policy, admin group, management server |
 
+## Session Notes (2026-03-19)
+- CleanDisk fixed: was hanging app because `needs_elevation: true` routed through `-Wait` UAC path. Dropped `C:\Windows\Temp` cleanup (needs admin); now user-level only (user TEMP + Recycle Bin). Commit: `be6d965`.
+- Certificate expiry detection shipped: Rust `cert_warnings` in `ComplianceStatus` (parallel PowerShell thread), SecurityPanel "Certificates" card (green OK / amber N expiring), backend `check_expiring_certificates()` + `cert_expiry_warning` daemon signal. Commit: `9ad4546`.
+- Next priority: fleet installer with env var injection (cert detection done, crossing off #1).
+
 ## Session Notes (2026-03-18, cont. #4)
-- Admin detection still failing after whoami SID fix: root cause was PATH — `whoami` in Caret process resolved to wrong binary. Fixed by using `$env:SystemRoot\System32\whoami.exe` absolute path + fallback via `net localgroup Administrators` checking both local and domain-prefixed username (`ADS\lawrencem`).
-- Dark/light theme toggle added to sidebar footer (sun/moon icon, persists via localStorage).
-- Favicon replaced — custom SVG icon (purple gradient diamond) generated via Python PIL + `tauri icon` CLI; title fixed from "Oxy" to "Caret".
-- Admin actions redesigned: flat button row → 3-column card grid with group label + icon + name.
-- Double firewall buttons removed; replaced with single contextual card (shows "Disable" when on, "Enable" when off).
-- Added CleanDisk admin action: deletes user TEMP, Windows\Temp, empties Recycle Bin — via UAC elevation.
-- Added contextual "Restart Print Spooler" card — only appears when spooler is stopped.
-- Fixed disk usage check to use C:\ (was using Path.home() which is misleading on Windows).
-- Added Windows Update age detection: checks `LastSuccessTime` registry key; signals `windows_update_stale` at ≥30 days (action_required) and ≥14 days (monitoring).
+- Admin detection still failing after whoami SID fix: root cause was PATH — `whoami` in Caret process resolved to wrong binary. Fixed by using `$env:SystemRoot\System32\whoami.exe` absolute path + fallback via `net localgroup Administrators` checking both local and domain-prefixed username (`ADS\lawrencem`). Commit: `eae1341`.
+- Dark/light theme toggle added to sidebar footer (sun/moon icon, persists via localStorage). Commit: `1c2e9be`.
+- Favicon replaced — custom SVG icon (purple gradient diamond) generated via Python PIL + `tauri icon` CLI; title fixed from "Oxy" to "Caret". Commit: `2147768`.
+- Admin actions redesigned: flat button row → 3-column card grid with group label + icon + name. Double firewall buttons removed; replaced with single contextual card. Commit: `1c2e9be`.
+- Added CleanDisk, contextual Restart Print Spooler, Windows Update age detection. Commit: `6ee2cb8`.
 
 ## Session Notes (2026-03-18, cont. #3)
 - BitLocker showed "Off" even when active: `Get-BitLockerVolume` requires an elevated process token; Tauri runs non-elevated so it always caught and returned `$false`. Fixed: replaced with `manage-bde -status C:` which works without elevation.
@@ -53,6 +54,16 @@ Three pillars:
 - Build artifacts moved outside OneDrive: `CARGO_TARGET_DIR=C:\Users\lawrencem\cargo-targets\caret`, PyInstaller → `C:\Users\lawrencem\caret-pyinstaller\`.
 - Rebuild needed: Rust `#[cfg]` guards were added then removed (violates Windows-only rule). Need one more full build to ship clean.
 
+## Current State (v0.2.1)
+
+- **Security panel**: 8 compliance cards — Firewall, Disk Encryption (tri-state: on/off/unknown), Antivirus, Windows Update, Print Spooler, Certificates (expiry within 30 days), System Events (expandable drill-down with inline fix buttons), Network
+- **Admin actions**: 3-column card grid — Firewall toggle (contextual), Flush DNS, Clear Teams cache, Reset OneDrive, Restart audio devices, Clean disk (user-level, no UAC), DISM + SFC repair (visible window, no UI block)
+- **Detection signals**: disk, CPU, RAM, Windows Update staleness, Defender off, Spooler stopped, audio/camera device errors, OneDrive stuck, Teams call lag, certificate expiry
+- **Admin detection**: absolute path whoami + `net localgroup` fallback; works for local and domain admins (`ADS\username`)
+- **Dark/light theme**: toggle in sidebar footer, persists via localStorage
+- **App icon**: custom Caret purple gradient logo; all Tauri icon sizes generated via `tauri icon` CLI
+- Settings hidden from non-admins; Jira config is env-var-only (no UI)
+
 ## Current State (v0.2.0)
 
 - **Auto-fix expanded**: 3 new Windows health signals — Windows Update pending reboot, Print Spooler stopped, Defender disabled
@@ -76,10 +87,9 @@ Three pillars:
 
 ## Next Priority
 
-1. **Better detection signals** — certificate errors (expiring certs in user store), RDP issues, proxy/SSL intercept detection. Catch before user calls IT.
-2. **Fleet installer with env var injection** — NSIS deploy with `CARET_JIRA_*`, `CARET_ADMIN_GROUP`, `CARET_MANAGEMENT_*` pre-baked. Prerequisite for fleet rollout.
-3. **Management server** — central fleet view: device health, open incidents, patterns across machines.
-4. Microsoft Copilot auth (MSAL SSO) — on hold, needs Azure AD app registration.
+1. **Fleet installer with env var injection** — NSIS deploy with `CARET_JIRA_*`, `CARET_ADMIN_GROUP`, `CARET_MANAGEMENT_*` pre-baked. Prerequisite for fleet rollout.
+2. **Management server** — central fleet view: device health, open incidents, patterns across machines.
+3. **Microsoft Copilot auth (MSAL SSO)** — on hold, needs Azure AD app registration.
 
 ## Build Rules
 

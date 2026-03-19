@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.1 — Certificate Expiry Detection + CleanDisk User-level Fix (2026-03-19)
+
+### Bug Fixes
+- `src-tauri/src/privilege/mod.rs`: `CleanDisk` now runs user-level (no UAC) — removes `C:\Windows\Temp` step (requires elevation), cleans only user TEMP + Recycle Bin; fixes app hang on click
+- App was hanging after "Clean disk" click: `needs_elevation: true` routed through `execute_with_platform_auth` which blocks UI thread; fixed by setting `needs_elevation: false`
+
+### New Detection Signal — Certificate Expiry
+- `backend/services/support_platform.py`: `check_expiring_certificates(days=30)` — PowerShell query of `Cert:\CurrentUser\My`; returns list of `{Subject, Expiry, DaysLeft}` per expiring cert
+- `backend/services/support_daemon.py`: `expiring_certs: list` field on `SupportSnapshot`; `cert_expiry_warning` incident — `action_required` if ≤7 days, `monitoring` otherwise; directs user to contact IT for renewal
+- `src-tauri/src/lib.rs`: `cert_warnings: usize` added to `ComplianceStatus`; parallel thread checks `Cert:\CurrentUser\My` and counts certs expiring within 30 days
+- `src/components/SecurityPanel.tsx`: "Certificates" card added to compliance grid — green "OK" / amber "N expiring"; included in summary bar issues count
+
 ## 0.2.0 — Admin Actions + Theme + Detection Signals (2026-03-18, cont. #4)
 
 ### Bug Fixes
