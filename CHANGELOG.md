@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.2 — Central Management Server (2026-03-19)
+
+### New: management-server/
+- `server.py`: FastAPI + SQLite fleet server — `POST /v1/devices/checkin` (upsert device record + append checkin history); `GET /v1/devices` (fleet list with online/stale/offline status); `GET /v1/devices/{hostname}` (detail + last 20 checkins); `GET /v1/fleet/summary` (totals + avg health); `GET /` HTML fleet dashboard (auto-refreshes 30s, health bars, bearer token auth)
+- `requirements.txt`: fastapi + uvicorn
+- `run.ps1`: creates .venv, installs deps, starts server on port 8100
+- Device status: online (<3m), stale (<15m), offline (>15m since last checkin)
+
+### Enhancement — Client Checkin Payload
+- `backend/services/management.py`: checkin now sends `disk_used_pct` (from daemon last_snapshot), `open_incidents` + `compliance_issues` (from daemon incidents_summary) so the fleet dashboard shows meaningful health data per device
+
 ## 0.2.1 — Certificate Expiry Detection + CleanDisk User-level Fix (2026-03-19)
 
 ### Bug Fixes

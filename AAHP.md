@@ -21,7 +21,9 @@ Three pillars:
 ## Session Notes (2026-03-19)
 - CleanDisk fixed: was hanging app because `needs_elevation: true` routed through `-Wait` UAC path. Dropped `C:\Windows\Temp` cleanup (needs admin); now user-level only (user TEMP + Recycle Bin). Commit: `be6d965`.
 - Certificate expiry detection shipped: Rust `cert_warnings` in `ComplianceStatus` (parallel PowerShell thread), SecurityPanel "Certificates" card (green OK / amber N expiring), backend `check_expiring_certificates()` + `cert_expiry_warning` daemon signal. Commit: `9ad4546`.
-- Next priority: fleet installer with env var injection (cert detection done, crossing off #1).
+- Central management server built: `management-server/` — FastAPI + SQLite, fleet dashboard at `/`, REST API for checkins/devices/summary, bearer token auth, online/stale/offline status. Commit: `19389f0`.
+- Client checkin payload expanded: `disk_used_pct`, `open_incidents`, `compliance_issues` now sent on each checkin.
+- Next priority: fleet installer with env var injection, then Jira.
 
 ## Session Notes (2026-03-18, cont. #4)
 - Admin detection still failing after whoami SID fix: root cause was PATH — `whoami` in Caret process resolved to wrong binary. Fixed by using `$env:SystemRoot\System32\whoami.exe` absolute path + fallback via `net localgroup Administrators` checking both local and domain-prefixed username (`ADS\lawrencem`). Commit: `eae1341`.
@@ -54,7 +56,7 @@ Three pillars:
 - Build artifacts moved outside OneDrive: `CARGO_TARGET_DIR=C:\Users\lawrencem\cargo-targets\caret`, PyInstaller → `C:\Users\lawrencem\caret-pyinstaller\`.
 - Rebuild needed: Rust `#[cfg]` guards were added then removed (violates Windows-only rule). Need one more full build to ship clean.
 
-## Current State (v0.2.1)
+## Current State (v0.2.2)
 
 - **Security panel**: 8 compliance cards — Firewall, Disk Encryption (tri-state: on/off/unknown), Antivirus, Windows Update, Print Spooler, Certificates (expiry within 30 days), System Events (expandable drill-down with inline fix buttons), Network
 - **Admin actions**: 3-column card grid — Firewall toggle (contextual), Flush DNS, Clear Teams cache, Reset OneDrive, Restart audio devices, Clean disk (user-level, no UAC), DISM + SFC repair (visible window, no UI block)
@@ -88,7 +90,7 @@ Three pillars:
 ## Next Priority
 
 1. **Fleet installer with env var injection** — NSIS deploy with `CARET_JIRA_*`, `CARET_ADMIN_GROUP`, `CARET_MANAGEMENT_*` pre-baked. Prerequisite for fleet rollout.
-2. **Management server** — central fleet view: device health, open incidents, patterns across machines.
+2. **Jira integration improvements** — user-facing Jira ticket creation flow, OAuth polish.
 3. **Microsoft Copilot auth (MSAL SSO)** — on hold, needs Azure AD app registration.
 
 ## Build Rules
