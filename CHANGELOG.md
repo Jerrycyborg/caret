@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.3 — Jira Integration (2026-03-19)
+
+### Settings — Jira config card
+- `src/components/Settings.tsx`: added `ticketing` section to `ConfigState`; Jira config card in "Org and Ticketing" panel — project key, issue type, OAuth client ID, write-only client secret, connection status badge, Save / Sign in with Jira / Sign out / Test connection buttons
+
+### Support — OAuth polling fix
+- `src/components/Support.tsx`: replaced one-shot 6s `setTimeout` with `setInterval` polling every 3s (up to 40 attempts = 2 min) in both the top banner and incident detail sign-in button — reliably detects OAuth completion without timing out
+
 ## 0.2.2 — Central Management Server (2026-03-19)
 
 ### New: management-server/

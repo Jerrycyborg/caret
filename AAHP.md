@@ -18,6 +18,10 @@ Three pillars:
 | Security | Compliance status — firewall, BitLocker, event errors; admin-gated UAC actions |
 | Settings | Admin-only config — Jira, support policy, admin group, management server |
 
+## Session Notes (2026-03-19, cont.)
+- Jira integration completed: Settings Jira config card (project key, issue type, OAuth client ID/secret, Save/Sign in/Sign out/Test buttons, connection badge). OAuth polling fixed from one-shot 6s to interval polling every 3s up to 2min. Commit: `a74c1d1`.
+- To set up Jira: create OAuth 2.0 app at developer.atlassian.com → set redirect URI to `http://localhost:8000/v1/settings/jira/oauth/callback` → enter client ID + secret in Settings → click Sign in with Jira.
+
 ## Session Notes (2026-03-19)
 - CleanDisk fixed: was hanging app because `needs_elevation: true` routed through `-Wait` UAC path. Dropped `C:\Windows\Temp` cleanup (needs admin); now user-level only (user TEMP + Recycle Bin). Commit: `be6d965`.
 - Certificate expiry detection shipped: Rust `cert_warnings` in `ComplianceStatus` (parallel PowerShell thread), SecurityPanel "Certificates" card (green OK / amber N expiring), backend `check_expiring_certificates()` + `cert_expiry_warning` daemon signal. Commit: `9ad4546`.
@@ -56,7 +60,7 @@ Three pillars:
 - Build artifacts moved outside OneDrive: `CARGO_TARGET_DIR=C:\Users\lawrencem\cargo-targets\caret`, PyInstaller → `C:\Users\lawrencem\caret-pyinstaller\`.
 - Rebuild needed: Rust `#[cfg]` guards were added then removed (violates Windows-only rule). Need one more full build to ship clean.
 
-## Current State (v0.2.2)
+## Current State (v0.2.3)
 
 - **Security panel**: 8 compliance cards — Firewall, Disk Encryption (tri-state: on/off/unknown), Antivirus, Windows Update, Print Spooler, Certificates (expiry within 30 days), System Events (expandable drill-down with inline fix buttons), Network
 - **Admin actions**: 3-column card grid — Firewall toggle (contextual), Flush DNS, Clear Teams cache, Reset OneDrive, Restart audio devices, Clean disk (user-level, no UAC), DISM + SFC repair (visible window, no UI block)
@@ -90,8 +94,7 @@ Three pillars:
 ## Next Priority
 
 1. **Fleet installer with env var injection** — NSIS deploy with `CARET_JIRA_*`, `CARET_ADMIN_GROUP`, `CARET_MANAGEMENT_*` pre-baked. Prerequisite for fleet rollout.
-2. **Jira integration improvements** — user-facing Jira ticket creation flow, OAuth polish.
-3. **Microsoft Copilot auth (MSAL SSO)** — on hold, needs Azure AD app registration.
+2. **Microsoft Copilot auth (MSAL SSO)** — on hold, needs Azure AD app registration.
 
 ## Build Rules
 
