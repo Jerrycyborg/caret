@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.5 — Fleet deployment: Linux server + Nginx + NSIS installer (2026-03-19)
+
+### Management server — production deployment
+- `server.py`: `CARET_ROOT_PATH` env var for `/admin` subpath support (FastAPI `root_path`)
+- `caret-mgmt.service`: systemd unit — runs as `www-data`, auto-restarts on failure
+- `nginx.conf`: reverse proxy config for `caret.tws-partners.com/admin/`
+- `deploy-linux.sh`: one-shot deploy to ISPConfig server — installs deps, venv, systemd, Nginx snippet
+
+### Fleet installer (Windows)
+- `build/windows/fleet-installer.nsi`: NSIS script wraps Caret EXE; writes `CARET_MANAGEMENT_SERVER_URL`, `CARET_MANAGEMENT_TOKEN`, `CARET_ADMIN_GROUP`, `CARET_ORG_NAME` as HKLM env vars; sets Caret autostart
+- `build/windows/build-fleet-installer.ps1`: interactive builder — prompts for config, calls makensis, outputs `Caret-Fleet-Setup.exe` ready for GPO/Intune/PDQ/SCCM
+
 ## 0.2.4 — Central config push via management server (2026-03-19)
 
 ### Management server
