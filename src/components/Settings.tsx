@@ -17,6 +17,12 @@ interface ProviderDef {
 
 type ConfigState = {
   org: { org_name: string; environment_label: string };
+  ticketing: {
+    jira_project_key: string;
+    jira_issue_type: string;
+    jira_oauth_client_id: string;
+    jira_base_url: string;
+  };
   support_policy: {
     auto_fix_enabled: boolean;
     default_escalation_policy: string;
@@ -40,6 +46,12 @@ const BACKEND_URL = "http://localhost:8000";
 
 const EMPTY_CONFIG: ConfigState = {
   org: { org_name: "", environment_label: "" },
+  ticketing: {
+    jira_project_key: "",
+    jira_issue_type: "Task",
+    jira_oauth_client_id: "",
+    jira_base_url: "",
+  },
   support_policy: {
     auto_fix_enabled: true,
     default_escalation_policy: "manual_review",
@@ -61,6 +73,9 @@ export default function Settings() {
   const [feedback, setFeedback] = useState<Record<string, string>>({});
   const [config, setConfig] = useState<ConfigState>(EMPTY_CONFIG);
   const [mgmtStatus, setMgmtStatus] = useState<MgmtStatus>("not_configured");
+  const [jiraOauth, setJiraOauth] = useState<{ app_configured: boolean; connected: boolean; site_name?: string } | null>(null);
+  const [jiraSecret, setJiraSecret] = useState("");
+  const [jiraSignInBusy, setJiraSignInBusy] = useState(false);
   const [logLines, setLogLines] = useState<string[]>([]);
   const [logPath, setLogPath] = useState("");
   const [logOpen, setLogOpen] = useState(false);
@@ -98,6 +113,11 @@ export default function Settings() {
     fetch(`${BACKEND_URL}/v1/management/status`)
       .then((r) => r.json())
       .then((data) => setMgmtStatus(data.last_status ?? "not_configured"))
+      .catch(() => {});
+
+    fetch(`${BACKEND_URL}/v1/settings/jira/oauth/status`)
+      .then((r) => r.json())
+      .then(setJiraOauth)
       .catch(() => {});
 
   }, []);
@@ -264,6 +284,103 @@ export default function Settings() {
                 />
               </div>
               <button className="btn-save" onClick={() => saveSection("management")} disabled={saving.management}>{feedback.management || (saving.management ? "…" : "Save")}</button>
+            </div>
+
+            <div className="settings-card">
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <strong>Jira ticketing</strong>
+                <span className={`provider-status ${jiraOauth?.connected ? "ok" : jiraOauth?.app_configured ? "missing" : "missing"}`}>
+                  {jiraOauth?.connected ? `Connected — ${jiraOauth.site_name ?? "Jira"}` : jiraOauth?.app_configured ? "Not signed in" : "Not configured"}
+                </span>
+              </div>
+              <div className="settings-line">Configure Jira to allow one-click IT ticket creation from incidents.</div>
+              <div className="provider-input-row settings-form-row">
+                <input
+                  className="provider-input"
+                  placeholder="Project key (e.g. IT, HELP)"
+                  value={config.ticketing.jira_project_key}
+                  onChange={(e) => setConfig((prev) => ({ ...prev, ticketing: { ...prev.ticketing, jira_project_key: e.target.value } }))}
+                />
+                <input
+                  className="provider-input"
+                  placeholder="Issue type (default: Task)"
+                  value={config.ticketing.jira_issue_type}
+                  onChange={(e) => setConfig((prev) => ({ ...prev, ticketing: { ...prev.ticketing, jira_issue_type: e.target.value } }))}
+                />
+              </div>
+              <div className="provider-input-row settings-form-row">
+                <input
+                  className="provider-input"
+                  placeholder="OAuth Client ID (from developer.atlassian.com)"
+                  value={config.ticketing.jira_oauth_client_id}
+                  onChange={(e) => setConfig((prev) => ({ ...prev, ticketing: { ...prev.ticketing, jira_oauth_client_id: e.target.value } }))}
+                />
+                <input
+                  type="password"
+                  className="provider-input"
+                  placeholder="OAuth Client Secret (write-only)"
+                  value={jiraSecret}
+                  onChange={(e) => setJiraSecret(e.target.value)}
+                  autoComplete="off"
+                />
+              </div>
+              <div className="provider-input-row settings-form-row" style={{ gap: "8px", flexWrap: "wrap" }}>
+                <button className="btn-save" onClick={async () => {
+                  const body: Record<string, string> = { ...config.ticketing };
+                  if (jiraSecret.trim()) body.jira_oauth_client_secret = jiraSecret.trim();
+                  setSaving((prev) => ({ ...prev, ticketing: true }));
+                  try {
+                    const res = await fetch(`${BACKEND_URL}/v1/settings/config/ticketing`, {
+                      method: "PUT", headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ value: body }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail ?? "Save failed");
+                    setConfig((prev) => ({ ...prev, ticketing: data.config }));
+                    setJiraSecret("");
+                    showFeedback("ticketing", "Saved");
+                  } catch { showFeedback("ticketing", "Error"); }
+                  finally { setSaving((prev) => ({ ...prev, ticketing: false })); }
+                }} disabled={saving.ticketing}>{feedback.ticketing || (saving.ticketing ? "…" : "Save")}</button>
+
+                {jiraOauth?.app_configured && !jiraOauth.connected && (
+                  <button className="btn-save" disabled={jiraSignInBusy} onClick={async () => {
+                    setJiraSignInBusy(true);
+                    try {
+                      const res = await fetch(`${BACKEND_URL}/v1/settings/jira/oauth/start`, { method: "POST" });
+                      const data = await res.json();
+                      if (!res.ok) throw new Error(data.detail);
+                      await invoke("plugin:opener|open_url", { url: data.auth_url });
+                      // Poll every 3s until connected (up to 2 min)
+                      let attempts = 0;
+                      const poll = setInterval(async () => {
+                        attempts++;
+                        const r = await fetch(`${BACKEND_URL}/v1/settings/jira/oauth/status`);
+                        const s = await r.json();
+                        setJiraOauth(s);
+                        if (s.connected || attempts >= 40) { clearInterval(poll); setJiraSignInBusy(false); }
+                      }, 3000);
+                    } catch { setJiraSignInBusy(false); }
+                  }}>{jiraSignInBusy ? "Waiting for login…" : "Sign in with Jira"}</button>
+                )}
+
+                {jiraOauth?.connected && (
+                  <button className="btn-clear" onClick={async () => {
+                    await fetch(`${BACKEND_URL}/v1/settings/jira/oauth`, { method: "DELETE" });
+                    setJiraOauth((prev) => prev ? { ...prev, connected: false } : null);
+                    showFeedback("ticketing", "Signed out");
+                  }}>Sign out</button>
+                )}
+
+                <button className="btn-clear" onClick={async () => {
+                  try {
+                    const res = await fetch(`${BACKEND_URL}/v1/settings/jira/test`, { method: "POST" });
+                    const data = await res.json();
+                    showFeedback("ticketing_test", data.ok ? `Connected as ${data.authenticated_as}` : data.detail ?? "Failed", 4000);
+                  } catch { showFeedback("ticketing_test", "Unreachable", 3000); }
+                }}>Test connection</button>
+                {feedback.ticketing_test && <span className="settings-line" style={{ color: "var(--accent-green)" }}>{feedback.ticketing_test}</span>}
+              </div>
             </div>
           </div>
         </section>

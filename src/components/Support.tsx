@@ -238,15 +238,19 @@ export default function Support() {
               const data = await res.json();
               if (!res.ok) throw new Error(data.detail);
               await invoke("plugin:opener|open_url", { url: data.auth_url });
-              setTimeout(async () => {
+              // Poll every 3s until connected (up to 2 min)
+              let attempts = 0;
+              const poll = setInterval(async () => {
+                attempts++;
                 const r = await fetch(`${BACKEND_URL}/v1/settings/jira/oauth/status`);
-                setJiraOauth(await r.json());
-                setJiraSignInBusy(false);
-              }, 6000);
+                const s = await r.json();
+                setJiraOauth(s);
+                if (s.connected || attempts >= 40) { clearInterval(poll); setJiraSignInBusy(false); }
+              }, 3000);
             } catch {
               setJiraSignInBusy(false);
             }
-          }}>{jiraSignInBusy ? "Opening browser…" : "Sign in with Jira"}</button>
+          }}>{jiraSignInBusy ? "Waiting for login…" : "Sign in with Jira"}</button>
         </div>
       )}
 
@@ -392,16 +396,20 @@ export default function Support() {
                             const data = await res.json();
                             if (!res.ok) throw new Error(data.detail ?? "Failed");
                             await invoke("plugin:opener|open_url", { url: data.auth_url });
-                            setTimeout(async () => {
+                            let attempts = 0;
+                            const poll = setInterval(async () => {
+                              attempts++;
                               const r = await fetch(`${BACKEND_URL}/v1/settings/jira/oauth/status`);
-                              setJiraOauth(await r.json());
-                            }, 6000);
-                          } finally {
+                              const s = await r.json();
+                              setJiraOauth(s);
+                              if (s.connected || attempts >= 40) { clearInterval(poll); setJiraSignInBusy(false); }
+                            }, 3000);
+                          } catch {
                             setJiraSignInBusy(false);
                           }
                         }}
                       >
-                        {jiraSignInBusy ? "Opening browser…" : "Sign in with Jira to create ticket"}
+                        {jiraSignInBusy ? "Waiting for login…" : "Sign in with Jira to create ticket"}
                       </button>
                     ) : (
                       <button
