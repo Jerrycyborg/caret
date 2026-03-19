@@ -13,6 +13,7 @@ from services.support_platform import (
     collect_cpu_load_pct,
     collect_memory_used_pct,
 )
+from services.support_daemon import support_daemon_status
 
 CHECKIN_INTERVAL_SECONDS = int(os.environ.get("CARET_MANAGEMENT_CHECKIN_INTERVAL", "60"))
 CARET_VERSION = os.environ.get("CARET_VERSION", "0.1.2")
@@ -56,6 +57,9 @@ async def _run_checkin() -> None:
 
     cpu_pct = await asyncio.to_thread(collect_cpu_load_pct)
     mem_pct = await asyncio.to_thread(collect_memory_used_pct)
+    daemon = await support_daemon_status()
+    snapshot = daemon.get("last_snapshot") or {}
+    incidents_summary = daemon.get("incidents_summary") or {}
 
     payload = {
         "hostname": platform.node(),
@@ -63,7 +67,10 @@ async def _run_checkin() -> None:
         "health": {
             "cpu_pct": round(cpu_pct, 1),
             "mem_used_pct": round(mem_pct, 1),
+            "disk_used_pct": round(snapshot.get("disk_used_pct", 0), 1),
         },
+        "open_incidents": incidents_summary.get("active_incident_count", 0),
+        "compliance_issues": incidents_summary.get("escalation_count", 0),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
