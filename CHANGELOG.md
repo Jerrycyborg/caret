@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.4 — Central config push via management server (2026-03-19)
+
+### Management server
+- `fleet_config` SQLite table; `GET /v1/config` (masked secrets); `PUT /v1/config` (saves all fleet config server-side)
+- `POST /v1/devices/checkin` response now includes `config` dict (non-secret keys) — devices auto-apply on each checkin
+- Dashboard: Fleet Configuration panel with all config fields (org, Jira, admin group); secrets stored server-side only
+
+### Caret client
+- `backend/services/management.py`: `_apply_server_config()` merges server-pushed config into local sections (ticketing, org, management) after every successful checkin — no per-device setup needed
+
 ## 0.2.3 — Jira Integration (2026-03-19)
 
 ### Settings — Jira config card

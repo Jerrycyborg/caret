@@ -18,6 +18,9 @@ Three pillars:
 | Security | Compliance status — firewall, BitLocker, event errors; admin-gated UAC actions |
 | Settings | Admin-only config — Jira, support policy, admin group, management server |
 
+## Session Notes (2026-03-19, cont. #2)
+- Central config push: management server `fleet_config` table + `GET/PUT /v1/config`; checkin response includes config; Caret client applies it via `_apply_server_config()`. IT sets Jira credentials once on server, all devices pick up on next checkin. Commit: `effc9a2`.
+
 ## Session Notes (2026-03-19, cont.)
 - Jira integration completed: Settings Jira config card (project key, issue type, OAuth client ID/secret, Save/Sign in/Sign out/Test buttons, connection badge). OAuth polling fixed from one-shot 6s to interval polling every 3s up to 2min. Commit: `a74c1d1`.
 - To set up Jira: create OAuth 2.0 app at developer.atlassian.com → set redirect URI to `http://localhost:8000/v1/settings/jira/oauth/callback` → enter client ID + secret in Settings → click Sign in with Jira.
@@ -60,7 +63,7 @@ Three pillars:
 - Build artifacts moved outside OneDrive: `CARGO_TARGET_DIR=C:\Users\lawrencem\cargo-targets\caret`, PyInstaller → `C:\Users\lawrencem\caret-pyinstaller\`.
 - Rebuild needed: Rust `#[cfg]` guards were added then removed (violates Windows-only rule). Need one more full build to ship clean.
 
-## Current State (v0.2.3)
+## Current State (v0.2.4)
 
 - **Security panel**: 8 compliance cards — Firewall, Disk Encryption (tri-state: on/off/unknown), Antivirus, Windows Update, Print Spooler, Certificates (expiry within 30 days), System Events (expandable drill-down with inline fix buttons), Network
 - **Admin actions**: 3-column card grid — Firewall toggle (contextual), Flush DNS, Clear Teams cache, Reset OneDrive, Restart audio devices, Clean disk (user-level, no UAC), DISM + SFC repair (visible window, no UI block)
