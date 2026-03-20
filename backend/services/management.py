@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import platform
+import subprocess
 from datetime import datetime, timezone
 from typing import Any
 
@@ -42,6 +43,19 @@ def management_status() -> dict[str, Any]:
     return dict(_mgmt_state)
 
 
+def _get_last_reboot() -> str:
+    try:
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-Command",
+             "(Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime().ToString('o')"],
+            capture_output=True, text=True, timeout=5,
+            creationflags=0x08000000,  # CREATE_NO_WINDOW
+        )
+        return result.stdout.strip()
+    except Exception:
+        return ""
+
+
 async def run_management_daemon(stop_event: asyncio.Event) -> None:
     while not stop_event.is_set():
         try:
@@ -69,6 +83,7 @@ async def _run_checkin() -> None:
 
     cpu_pct = await asyncio.to_thread(collect_cpu_load_pct)
     mem_pct = await asyncio.to_thread(collect_memory_used_pct)
+    last_reboot = await asyncio.to_thread(_get_last_reboot)
     daemon = await support_daemon_status()
     snapshot = daemon.get("last_snapshot") or {}
     incidents_summary = daemon.get("summary") or {}
@@ -76,6 +91,8 @@ async def _run_checkin() -> None:
     payload = {
         "hostname": platform.node(),
         "caret_version": CARET_VERSION,
+        "logged_in_user": os.environ.get("USERNAME", ""),
+        "last_reboot": last_reboot,
         "health": {
             "cpu_pct": round(cpu_pct, 1),
             "mem_used_pct": round(mem_pct, 1),

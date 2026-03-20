@@ -11,7 +11,7 @@
 ; Or use build-fleet-installer.ps1 which sets all params interactively.
 
 !define PRODUCT_NAME "Caret"
-!define INSTALLER_EXE "..\..\..\dist\Caret_0.1.9_x64-setup.exe"
+!define INSTALLER_EXE "..\..\dist\Caret_0.1.9_x64-setup.exe"
 
 ; === Overridable via /D flags ===
 !ifndef MANAGEMENT_URL

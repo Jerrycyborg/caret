@@ -37,6 +37,11 @@ ROOT_PATH = os.environ.get("CARET_ROOT_PATH", "")  # e.g. "/admin" when behind r
 app = FastAPI(title="Caret Management Server", version="1.0.0", root_path=ROOT_PATH)
 _bearer = HTTPBearer(auto_error=False)
 
+
+@app.on_event("startup")
+def _startup() -> None:
+    _init_db()
+
 # ---------------------------------------------------------------------------
 # Database
 # ---------------------------------------------------------------------------
@@ -44,15 +49,17 @@ def _init_db() -> None:
     with _db() as con:
         con.executescript("""
             CREATE TABLE IF NOT EXISTS devices (
-                hostname        TEXT PRIMARY KEY,
-                caret_version   TEXT,
-                last_seen       TEXT,
-                cpu_pct         REAL,
-                mem_used_pct    REAL,
-                disk_used_pct   REAL,
-                open_incidents  INTEGER DEFAULT 0,
+                hostname          TEXT PRIMARY KEY,
+                caret_version     TEXT,
+                last_seen         TEXT,
+                cpu_pct           REAL,
+                mem_used_pct      REAL,
+                disk_used_pct     REAL,
+                open_incidents    INTEGER DEFAULT 0,
                 compliance_issues INTEGER DEFAULT 0,
-                extra           TEXT
+                logged_in_user    TEXT DEFAULT '',
+                last_reboot       TEXT DEFAULT '',
+                extra             TEXT
             );
             CREATE TABLE IF NOT EXISTS checkins (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,6 +68,14 @@ def _init_db() -> None:
                 payload     TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_checkins_host ON checkins(hostname);
+        """)
+        # Migrate existing DBs that predate these columns
+        existing = {row[1] for row in con.execute("PRAGMA table_info(devices)").fetchall()}
+        if "logged_in_user" not in existing:
+            con.execute("ALTER TABLE devices ADD COLUMN logged_in_user TEXT DEFAULT ''")
+        if "last_reboot" not in existing:
+            con.execute("ALTER TABLE devices ADD COLUMN last_reboot TEXT DEFAULT ''")
+        con.executescript("""
             CREATE TABLE IF NOT EXISTS fleet_config (
                 key     TEXT PRIMARY KEY,
                 value   TEXT
@@ -158,12 +173,15 @@ async def checkin(request: Request) -> dict:
     incidents = int(body.get("open_incidents", 0))
     compliance = int(body.get("compliance_issues", 0))
     version = body.get("caret_version", "")
+    logged_in_user = body.get("logged_in_user", "")
+    last_reboot = body.get("last_reboot", "")
 
     with _db() as con:
         con.execute("""
             INSERT INTO devices (hostname, caret_version, last_seen, cpu_pct, mem_used_pct,
-                                 disk_used_pct, open_incidents, compliance_issues, extra)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                 disk_used_pct, open_incidents, compliance_issues,
+                                 logged_in_user, last_reboot, extra)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(hostname) DO UPDATE SET
                 caret_version=excluded.caret_version,
                 last_seen=excluded.last_seen,
@@ -172,8 +190,11 @@ async def checkin(request: Request) -> dict:
                 disk_used_pct=excluded.disk_used_pct,
                 open_incidents=excluded.open_incidents,
                 compliance_issues=excluded.compliance_issues,
+                logged_in_user=excluded.logged_in_user,
+                last_reboot=excluded.last_reboot,
                 extra=excluded.extra
-        """, (hostname, version, ts, cpu, mem, disk, incidents, compliance, json.dumps(body)))
+        """, (hostname, version, ts, cpu, mem, disk, incidents, compliance,
+              logged_in_user, last_reboot, json.dumps(body)))
         con.execute(
             "INSERT INTO checkins (hostname, ts, payload) VALUES (?, ?, ?)",
             (hostname, ts, json.dumps(body)),
@@ -318,11 +339,11 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
 <div id="devices-wrap">
   <table id="devices-table">
     <thead><tr>
-      <th>Hostname</th><th>Status</th><th>Version</th>
+      <th>Hostname</th><th>Status</th><th>Logged-in User</th><th>Version</th>
       <th>CPU</th><th>Memory</th><th>Disk</th>
-      <th>Incidents</th><th>Compliance</th><th>Last Seen</th>
+      <th>Incidents</th><th>Compliance</th><th>Last Reboot</th><th>Last Seen</th>
     </tr></thead>
-    <tbody id="devices-body"><tr><td colspan="9" style="color:var(--muted); text-align:center; padding:32px">Loading…</td></tr></tbody>
+    <tbody id="devices-body"><tr><td colspan="11" style="color:var(--muted); text-align:center; padding:32px">Loading…</td></tr></tbody>
   </table>
 </div>
 
@@ -384,19 +405,21 @@ async function refresh() {
 
   const tbody = document.getElementById('devices-body');
   if (!devices.length) {
-    tbody.innerHTML = '<tr><td colspan="9" style="color:var(--muted);text-align:center;padding:32px">No devices checked in yet.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" style="color:var(--muted);text-align:center;padding:32px">No devices checked in yet.</td></tr>';
     return;
   }
   tbody.innerHTML = devices.map(d => `
     <tr onclick="location.href='/v1/devices/${encodeURIComponent(d.hostname)}'">
       <td><strong>${d.hostname}</strong></td>
       <td><span class="badge badge-${d.status}">${d.status}</span></td>
+      <td style="color:var(--muted)">${d.logged_in_user || '—'}</td>
       <td style="color:var(--muted)">${d.caret_version || '—'}</td>
       <td>${bar(d.cpu_pct)}</td>
       <td>${bar(d.mem_used_pct)}</td>
       <td>${bar(d.disk_used_pct)}</td>
       <td style="color:${d.open_incidents > 0 ? 'var(--amber)' : 'var(--green)'}">${d.open_incidents}</td>
       <td style="color:${d.compliance_issues > 0 ? 'var(--amber)' : 'var(--green)'}">${d.compliance_issues}</td>
+      <td style="color:var(--muted)">${d.last_reboot ? relTime(d.last_reboot) : '—'}</td>
       <td style="color:var(--muted)">${relTime(d.last_seen)}</td>
     </tr>
   `).join('');

@@ -43,8 +43,21 @@ if (-not $makensis) {
     }
 }
 
-$nsiScript = "$PSScriptRoot\fleet-installer.nsi"
-$outputDir  = "$PSScriptRoot\..\..\dist"
+$nsiScript   = "$PSScriptRoot\fleet-installer.nsi"
+$distDir     = "$PSScriptRoot\..\..\dist"
+$baseInstaller = "$distDir\Caret_0.1.9_x64-setup.exe"
+$cargoInstaller = "C:\Users\lawrencem\cargo-targets\caret\release\bundle\nsis\Caret_0.1.9_x64-setup.exe"
+
+# Copy base installer into dist/ if not already there
+if (-not (Test-Path $baseInstaller)) {
+    if (Test-Path $cargoInstaller) {
+        Copy-Item $cargoInstaller $baseInstaller
+        Write-Host "Copied base installer to dist\" -ForegroundColor Gray
+    } else {
+        Write-Error "Base installer not found at:`n  $cargoInstaller`nRun a full package build first."
+        exit 1
+    }
+}
 
 Write-Host ""
 Write-Host "Building Caret Fleet Installer..." -ForegroundColor Cyan
@@ -69,8 +82,6 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "  $output"
     Write-Host ""
     Write-Host "Deploy via GPO, Intune, PDQ Deploy, or SCCM:"
-    Write-Host "  msiexec /i Caret-Fleet-Setup.exe /quiet"
-    Write-Host "  -- OR --"
     Write-Host "  Caret-Fleet-Setup.exe /S"
 } else {
     Write-Error "Build failed (exit code $LASTEXITCODE)"
