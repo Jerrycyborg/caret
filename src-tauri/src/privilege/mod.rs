@@ -1,6 +1,5 @@
+use crate::run_command;
 use serde::{Deserialize, Serialize};
-use std::ffi::OsStr;
-use std::process::Command;
 use tauri::command;
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -64,36 +63,6 @@ struct PlannedPrivilegedCommand {
     program: String,
     args: Vec<String>,
     needs_elevation: bool,
-}
-
-fn run_command<I, S>(program: &str, args: I) -> Result<String, String>
-where
-    I: IntoIterator<Item = S>,
-    S: AsRef<OsStr>,
-{
-    use std::os::windows::process::CommandExt;
-    let output = Command::new(program)
-        .args(args)
-        .creation_flags(0x0800_0000) // CREATE_NO_WINDOW — suppress console flash
-        .output()
-        .map_err(|e| format!("Failed to run {program}: {e}"))?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-
-    if output.status.success() {
-        if stdout.is_empty() {
-            Ok("OK".to_string())
-        } else {
-            Ok(stdout)
-        }
-    } else if !stderr.is_empty() {
-        Err(stderr)
-    } else if !stdout.is_empty() {
-        Err(stdout)
-    } else {
-        Err(format!("{program} exited with status {}", output.status))
-    }
 }
 
 fn is_safe_identifier(value: &str) -> bool {
@@ -291,22 +260,32 @@ fn plan_privileged_action(
                 "-WindowStyle".to_string(),
                 "Hidden".to_string(),
                 "-Command".to_string(),
-                concat!(
-                    "Get-Process -Name 'ms-teams','Teams' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; ",
-                    "Start-Sleep -Seconds 2; ",
-                    "$paths = @(",
-                        "\"$env:APPDATA\\Microsoft\\Teams\\Cache\",",
-                        "\"$env:APPDATA\\Microsoft\\Teams\\blob_storage\",",
-                        "\"$env:APPDATA\\Microsoft\\Teams\\databases\",",
-                        "\"$env:APPDATA\\Microsoft\\Teams\\GPUCache\",",
-                        "\"$env:APPDATA\\Microsoft\\Teams\\IndexedDB\",",
-                        "\"$env:APPDATA\\Microsoft\\Teams\\Local Storage\",",
-                        "\"$env:APPDATA\\Microsoft\\Teams\\tmp\",",
-                        "\"$env:LOCALAPPDATA\\Packages\\MSTeams_8wekyb3d8bbwe\\LocalCache\\Microsoft\\MSTeams\\EBWebView\\Default\\Cache\"",
-                    "); ",
-                    "$n=0; foreach($p in $paths){if(Test-Path $p){Remove-Item $p -Recurse -Force -ErrorAction SilentlyContinue;$n++}}; ",
-                    "\"Cleared $n Teams cache folders. Restart Teams to reconnect.\""
-                ).to_string(),
+                // Kill Teams; clear old classic Teams paths + new MSIX LocalCache tree
+                [
+                    "Get-Process -Name 'ms-teams','Teams' -EA SilentlyContinue | Stop-Process -Force -EA SilentlyContinue;",
+                    "Start-Sleep -Seconds 2;",
+                    "$n = 0;",
+                    // Old classic Teams subfolders
+                    "foreach ($p in @(",
+                    "  \"$env:APPDATA\\Microsoft\\Teams\\Cache\",",
+                    "  \"$env:APPDATA\\Microsoft\\Teams\\blob_storage\",",
+                    "  \"$env:APPDATA\\Microsoft\\Teams\\databases\",",
+                    "  \"$env:APPDATA\\Microsoft\\Teams\\GPUCache\",",
+                    "  \"$env:APPDATA\\Microsoft\\Teams\\IndexedDB\",",
+                    "  \"$env:APPDATA\\Microsoft\\Teams\\Local Storage\",",
+                    "  \"$env:APPDATA\\Microsoft\\Teams\\tmp\"",
+                    ")) { if (Test-Path $p) { Remove-Item $p -Recurse -Force -EA SilentlyContinue; $n++ } };",
+                    // New Teams (MSIX) — scan LocalCache and delete known cache folder names
+                    "$newRoot = \"$env:LOCALAPPDATA\\Packages\\MSTeams_8wekyb3d8bbwe\\LocalCache\";",
+                    "if (Test-Path $newRoot) {",
+                    "  $cacheNames = @('Cache','GPUCache','blob_storage','databases','IndexedDB','tmp','Code Cache','DawnCache','ShaderCache','EBWebView');",
+                    "  Get-ChildItem $newRoot -Recurse -Directory -EA SilentlyContinue |",
+                    "    Where-Object { $cacheNames -contains $_.Name } |",
+                    "    ForEach-Object { Remove-Item $_.FullName -Recurse -Force -EA SilentlyContinue; $n++ };",
+                    "  Get-ChildItem $newRoot -File -EA SilentlyContinue | Remove-Item -Force -EA SilentlyContinue",
+                    "};",
+                    "\"Cleared $n Teams cache folders. Restart Teams to reconnect.\"",
+                ].join(" "),
             ],
             needs_elevation: false,
         }),

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { BACKEND_URL } from "../config";
 
 interface HealthTile {
   label: string;
@@ -20,8 +21,6 @@ interface ActiveIncident {
 interface HomeProps {
   onNavigate: (view: "help" | "incidents" | "security" | "settings") => void;
 }
-
-const BACKEND_URL = "http://localhost:8000";
 
 function healthStatus(pct: number): "ok" | "warn" | "critical" {
   if (pct >= 85) return "critical";
@@ -86,7 +85,7 @@ export default function Home({ onNavigate }: HomeProps) {
       }).catch(() => setBackendStatus("unavailable"));
     };
     checkBackend();
-    pollRef.current = setInterval(checkBackend, 3000);
+    pollRef.current = setInterval(checkBackend, 10000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
 
@@ -130,7 +129,7 @@ export default function Home({ onNavigate }: HomeProps) {
 
   const overallLabel =
     overallStatus === "critical" ? "Needs Attention"
-    : overallStatus === "warn" ? "Monitor"
+    : overallStatus === "warn" ? "Normal"
     : "Healthy";
 
   const tileIcon = (icon: HealthTile["icon"]) => {

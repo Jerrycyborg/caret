@@ -67,15 +67,32 @@ Three pillars:
 - Build artifacts moved outside OneDrive: `CARGO_TARGET_DIR=C:\Users\lawrencem\cargo-targets\caret`, PyInstaller → `C:\Users\lawrencem\caret-pyinstaller\`.
 - Rebuild needed: Rust `#[cfg]` guards were added then removed (violates Windows-only rule). Need one more full build to ship clean.
 
-## Current State (v0.2.5)
+## Session Notes (2026-03-20)
+- v0.2.6 pre-fleet polish: all Tier 1/2/3 plan items implemented and verified. Commit: pending.
+- Fleet-breaking bugs fixed: management daemon wrong dict key (`incidents_summary` → `summary`); stale version defaults (`0.1.2`/`0.1.9` → `0.2.6`); SecurityPanel UAC cancel freeze (try/catch on both invoke calls); plugin relative path → `app_data_dir()`.
+- Code quality: `BACKEND_URL` extracted to `src/config.ts` (7 files updated); support_daemon chained comparison fixed; duplicate `run_command` removed from `privilege/mod.rs`; `run_command` made `pub(crate)` in `lib.rs`.
+- CPU spike fix: `ProcessRefreshKind::everything()` removed from `get_system_info` — was enumerating all 200+ processes on every Home tab load. Now only CPU + memory refresh.
+- Security panel speed: 4 separate PS spawns (defender, reboot, spooler, certs) merged into 1 combined script; `recv_timeout(10s)` on all channels; 60s startup delay added to support daemon.
+- Help tab: native `<select>` model dropdown replaced with Copilot pill UI (fixes WebView2 dropdown close bug). AI provider locked to Microsoft Copilot (`azure/gpt-4o`). `backend/routers/models.py` simplified to Copilot-only.
+- Clear Teams Cache fix: old script targeted only one specific EBWebView subfolder (always 0 on New Teams). New script dynamically scans full `LocalCache` tree for known cache folder names — works for both classic and MSIX New Teams.
+- UX fixes: "Monitor" badge on Home → "Normal" (less alarming); action result card now shows specific result text first (not generic "Sensitive OS action..."); "Running with elevated privileges…" → "Running…" (non-UAC actions were showing wrong label); confirm button shows "run now" vs "run with UAC" correctly based on execution_path.
 
-- **Security panel**: 8 compliance cards — Firewall, Disk Encryption (tri-state: on/off/unknown), Antivirus, Windows Update, Print Spooler, Certificates (expiry within 30 days), System Events (expandable drill-down with inline fix buttons), Network
-- **Admin actions**: 3-column card grid — Firewall toggle (contextual), Flush DNS, Clear Teams cache, Reset OneDrive, Restart audio devices, Clean disk (user-level, no UAC), DISM + SFC repair (visible window, no UI block)
+## Current State (v0.2.6)
+
+- **Security panel**: 8 compliance cards — Firewall, Disk Encryption (tri-state), Antivirus, Windows Update, Print Spooler, Certificates (30-day expiry), System Events (expandable + inline fix buttons), Network
+- **Admin actions** (all verified working): Flush DNS (UAC), Clear Teams Cache (no UAC, New+classic Teams), Reset OneDrive (no UAC), Restart Audio Devices (UAC), Clean Disk (no UAC, user TEMP + Recycle Bin), DISM + SFC Repair (visible elevated window)
+- **AI**: Locked to Microsoft Copilot (`azure/gpt-4o`). Copilot pill in Help tab with Ready/Not configured badge. Model status from `/v1/models/status`.
+- **Home**: CPU/RAM/disk tiles; "Healthy" / "Normal" / "Needs Attention" badge (not "Monitor"); backend poll at 10s; 60s daemon startup delay reduces launch CPU spike.
 - **Detection signals**: disk, CPU, RAM, Windows Update staleness, Defender off, Spooler stopped, audio/camera device errors, OneDrive stuck, Teams call lag, certificate expiry
-- **Admin detection**: absolute path whoami + `net localgroup` fallback; works for local and domain admins (`ADS\username`)
-- **Dark/light theme**: toggle in sidebar footer, persists via localStorage
-- **App icon**: custom Caret purple gradient logo; all Tauri icon sizes generated via `tauri icon` CLI
-- Settings hidden from non-admins; Jira config is env-var-only (no UI)
+- **Fleet**: management server (ISPConfig + Nginx + systemd), NSIS fleet installer with env var injection, central config push on checkin
+- **Admin detection**: absolute path whoami + `net localgroup` fallback; local and domain admins
+- **Dark/light theme**: sidebar footer toggle, localStorage-persisted
+- Settings hidden from non-admins; Jira config env-var-only
+
+## Next Priorities
+1. Verify fleet installer env var injection with real machine (`Caret-Fleet-Setup.exe` via GPO/Intune)
+2. End-to-end smoke test on a fresh Windows VM (non-admin user + admin user)
+3. Backend sidecar rebuild if Python deps changed
 
 ## Current State (v0.2.0)
 

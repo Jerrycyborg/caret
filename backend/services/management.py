@@ -28,7 +28,7 @@ _SERVER_CONFIG_MAP: dict[str, tuple[str, str]] = {
 }
 
 CHECKIN_INTERVAL_SECONDS = int(os.environ.get("CARET_MANAGEMENT_CHECKIN_INTERVAL", "60"))
-CARET_VERSION = os.environ.get("CARET_VERSION", "0.1.2")
+CARET_VERSION = os.environ.get("CARET_VERSION", "0.2.6")
 
 _mgmt_state: dict[str, Any] = {
     "configured": False,
@@ -71,7 +71,7 @@ async def _run_checkin() -> None:
     mem_pct = await asyncio.to_thread(collect_memory_used_pct)
     daemon = await support_daemon_status()
     snapshot = daemon.get("last_snapshot") or {}
-    incidents_summary = daemon.get("incidents_summary") or {}
+    incidents_summary = daemon.get("summary") or {}
 
     payload = {
         "hostname": platform.node(),

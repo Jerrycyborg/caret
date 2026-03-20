@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { BACKEND_URL } from "../config";
 
 interface Message {
   id: string;
@@ -44,23 +45,21 @@ interface ConversationMeta {
   last_agent_state?: string;
 }
 
-const BACKEND_URL = "http://localhost:8000";
-
 export default function Chat({
   conversationId,
   onConversationCreated,
   onConversationUpdated,
   onOpenTask,
 }: ChatProps) {
+  const model = "azure/gpt-4o";
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [model, setModel] = useState("ollama/llama3.2");
   const [isStreaming, setIsStreaming] = useState(false);
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
   const [backendError, setBackendError] = useState<string | null>(null);
   const [modelReady, setModelReady] = useState<{ ready: boolean; hint?: string } | null>(null);
   const [taskHandoff, setTaskHandoff] = useState<TaskHandoff | null>(null);
-  const [conversationMeta, setConversationMeta] = useState<ConversationMeta | null>(null);
+  const [, setConversationMeta] = useState<ConversationMeta | null>(null);
   const activeConvRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -99,7 +98,7 @@ export default function Chat({
       .then((r) => r.json())
       .then((data) => {
         if (activeConvRef.current !== conversationId) return;
-        if (data.model) setModel(data.model);
+        // model is fixed to Copilot — ignore server model field
         setConversationMeta({
           channel_type: data.channel_type ?? "desktop",
           session_status: data.session_status ?? "active",
@@ -218,28 +217,38 @@ export default function Chat({
   return (
     <div className="chat">
       <div className="chat-header">
-        <select className="model-select" value={model} onChange={(e) => setModel(e.target.value)}>
-          <option value="ollama/llama3.2">Local (llama3.2)</option>
-          <option value="openai/gpt-4o">OpenAI GPT-4o</option>
-          <option value="anthropic/claude-sonnet-4-6">Claude Sonnet</option>
-          <option value="gemini/gemini-1.5-pro">Gemini 1.5 Pro</option>
-        </select>
-        {conversationMeta && (
-          <span className="session-chip">
-            {conversationMeta.channel_type} / {conversationMeta.session_status}
-            {conversationMeta.last_executor ? ` / ${conversationMeta.last_executor}` : ""}
-          </span>
-        )}
+        <div className="copilot-pill">
+          <svg className="copilot-logo" width="18" height="18" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="0" y="0" width="10" height="10" fill="#F25022"/>
+            <rect x="11" y="0" width="10" height="10" fill="#7FBA00"/>
+            <rect x="0" y="11" width="10" height="10" fill="#00A4EF"/>
+            <rect x="11" y="11" width="10" height="10" fill="#FFB900"/>
+          </svg>
+          <span className="copilot-name">Microsoft Copilot</span>
+          {modelReady === null ? (
+            <span className="copilot-badge badge-loading">Checking…</span>
+          ) : modelReady.ready ? (
+            <span className="copilot-badge badge-ready">● Ready</span>
+          ) : (
+            <span className="copilot-badge badge-unconfigured">● Not configured</span>
+          )}
+        </div>
         {backendOnline !== null && (
           <span className={`backend-status ${backendOnline ? "online" : "offline"}`} title={backendError ?? undefined}>
-            {backendOnline ? "● Backend online" : `● Backend offline${backendError ? " — " + backendError : ""}`}
+            {backendOnline ? "● Online" : "● Offline"}
           </span>
         )}
       </div>
 
       {modelReady?.ready === false && (
         <div className="model-unavailable-banner">
-          {modelReady.hint ?? "No AI model is configured for this device. Contact IT to enable the Help assistant."}
+          <svg width="16" height="16" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg" style={{flexShrink: 0}}>
+            <rect x="0" y="0" width="10" height="10" fill="#F25022"/>
+            <rect x="11" y="0" width="10" height="10" fill="#7FBA00"/>
+            <rect x="0" y="11" width="10" height="10" fill="#00A4EF"/>
+            <rect x="11" y="11" width="10" height="10" fill="#FFB900"/>
+          </svg>
+          {modelReady.hint ?? "Microsoft Copilot is not configured for this device. Contact IT to enable the assistant."}
         </div>
       )}
 

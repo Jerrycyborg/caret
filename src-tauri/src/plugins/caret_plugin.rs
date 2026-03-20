@@ -1,10 +1,17 @@
 use serde::Serialize;
 use std::collections::HashSet;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tauri::command;
+use tauri::Manager;
 
-const INSTALL_STATE_PATH: &str = "plugins/installed.txt";
+fn installed_plugins_path(app: &tauri::AppHandle) -> PathBuf {
+    app.path()
+        .app_data_dir()
+        .unwrap_or_else(|_| PathBuf::from("."))
+        .join("plugins")
+        .join("installed.txt")
+}
 
 pub trait CaretPlugin {
     fn name(&self) -> &'static str;
@@ -54,13 +61,16 @@ const PLUGIN_CATALOG: &[PluginCatalogEntry] = &[
 pub struct PluginRegistry {
     plugins: Vec<Box<dyn CaretPlugin + Send + Sync>>,
     installed: HashSet<String>,
+    install_path: PathBuf,
 }
 
 impl PluginRegistry {
-    pub fn new() -> Self {
+    pub fn new(install_path: PathBuf) -> Self {
+        let installed = load_installed_plugins(&install_path);
         Self {
             plugins: Vec::new(),
-            installed: load_installed_plugins(),
+            installed,
+            install_path,
         }
     }
 
@@ -95,7 +105,7 @@ impl PluginRegistry {
         if !self.installed.insert(name.to_string()) {
             return Err(format!("Plugin '{name}' is already installed."));
         }
-        save_installed_plugins(&self.installed)
+        save_installed_plugins(&self.installed, &self.install_path)
     }
 
     pub fn uninstall(&mut self, name: &str) -> Result<(), String> {
@@ -103,7 +113,7 @@ impl PluginRegistry {
         if !self.installed.remove(name) {
             return Err(format!("Plugin '{name}' is not installed."));
         }
-        save_installed_plugins(&self.installed)
+        save_installed_plugins(&self.installed, &self.install_path)
     }
 }
 
@@ -135,9 +145,9 @@ impl CaretPlugin for EchoPlugin {
     }
 }
 
-fn load_installed_plugins() -> HashSet<String> {
+fn load_installed_plugins(path: &Path) -> HashSet<String> {
     let mut installed = HashSet::new();
-    if let Ok(data) = fs::read_to_string(INSTALL_STATE_PATH) {
+    if let Ok(data) = fs::read_to_string(path) {
         for line in data.lines() {
             let name = line.trim();
             if !name.is_empty() {
@@ -148,8 +158,7 @@ fn load_installed_plugins() -> HashSet<String> {
     installed
 }
 
-fn save_installed_plugins(installed: &HashSet<String>) -> Result<(), String> {
-    let path = Path::new(INSTALL_STATE_PATH);
+fn save_installed_plugins(installed: &HashSet<String>, path: &Path) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -183,22 +192,22 @@ fn discover(installed: &HashSet<String>) -> Vec<PluginInfo> {
 }
 
 #[command]
-pub fn list_plugins() -> Vec<PluginInfo> {
-    let mut registry = PluginRegistry::new();
+pub fn list_plugins(app: tauri::AppHandle) -> Vec<PluginInfo> {
+    let mut registry = PluginRegistry::new(installed_plugins_path(&app));
     registry.register(Box::new(EchoPlugin));
     registry.list()
 }
 
 #[command]
-pub fn run_plugin(name: String, input: String) -> Option<String> {
-    let mut registry = PluginRegistry::new();
+pub fn run_plugin(app: tauri::AppHandle, name: String, input: String) -> Option<String> {
+    let mut registry = PluginRegistry::new(installed_plugins_path(&app));
     registry.register(Box::new(EchoPlugin));
     registry.run(&name, &input)
 }
 
 #[command]
-pub fn toggle_plugin_enabled(name: String, enabled: bool) -> Result<(), String> {
-    let mut registry = PluginRegistry::new();
+pub fn toggle_plugin_enabled(app: tauri::AppHandle, name: String, enabled: bool) -> Result<(), String> {
+    let mut registry = PluginRegistry::new(installed_plugins_path(&app));
     if enabled {
         registry.install(&name)
     } else {
@@ -207,18 +216,18 @@ pub fn toggle_plugin_enabled(name: String, enabled: bool) -> Result<(), String> 
 }
 
 #[command]
-pub fn discover_plugins() -> Vec<PluginInfo> {
-    discover(&load_installed_plugins())
+pub fn discover_plugins(app: tauri::AppHandle) -> Vec<PluginInfo> {
+    discover(&load_installed_plugins(&installed_plugins_path(&app)))
 }
 
 #[command]
-pub fn install_plugin(name: String) -> Result<(), String> {
-    let mut registry = PluginRegistry::new();
+pub fn install_plugin(app: tauri::AppHandle, name: String) -> Result<(), String> {
+    let mut registry = PluginRegistry::new(installed_plugins_path(&app));
     registry.install(&name)
 }
 
 #[command]
-pub fn uninstall_plugin(name: String) -> Result<(), String> {
-    let mut registry = PluginRegistry::new();
+pub fn uninstall_plugin(app: tauri::AppHandle, name: String) -> Result<(), String> {
+    let mut registry = PluginRegistry::new(installed_plugins_path(&app));
     registry.uninstall(&name)
 }

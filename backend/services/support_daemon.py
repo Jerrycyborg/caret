@@ -386,7 +386,7 @@ def evaluate_support_snapshot(snapshot: SupportSnapshot) -> list[SupportIssue]:
                 auto_fix_kind="report_update_pending",
             )
         )
-    elif 0 <= snapshot.windows_update_age_days >= 14:
+    elif 14 <= snapshot.windows_update_age_days < 30:
         issues.append(
             SupportIssue(
                 key="windows_update_stale",
@@ -497,6 +497,11 @@ def evaluate_support_snapshot(snapshot: SupportSnapshot) -> list[SupportIssue]:
 
 async def run_support_daemon(stop_event: asyncio.Event) -> None:
     _daemon_state["running"] = True
+    # Wait for backend to fully settle before first heavy check cycle
+    try:
+        await asyncio.wait_for(stop_event.wait(), timeout=60)
+    except asyncio.TimeoutError:
+        pass
     while not stop_event.is_set():
         try:
             now = datetime.now(timezone.utc)

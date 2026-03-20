@@ -11,7 +11,7 @@ use std::time::Duration;
 use tauri::{Manager, RunEvent};
 use tools::{execute_tool_adapter, list_tool_adapters};
 
-fn run_command<I, S>(program: &str, args: I) -> Result<String, String>
+pub(crate) fn run_command<I, S>(program: &str, args: I) -> Result<String, String>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
@@ -164,7 +164,7 @@ fn detect_execution_targets() -> Vec<ExecutionTargetInfo> {
     ]
 }
 
-use sysinfo::{CpuRefreshKind, Disks, MemoryRefreshKind, ProcessRefreshKind, RefreshKind, System};
+use sysinfo::{CpuRefreshKind, Disks, MemoryRefreshKind, RefreshKind, System};
 
 #[derive(Serialize)]
 pub struct CpuInfo {
@@ -190,19 +190,10 @@ pub struct DiskInfo {
 }
 
 #[derive(Serialize)]
-pub struct ProcessInfo {
-    pub pid: u32,
-    pub name: String,
-    pub cpu_pct: f32,
-    pub mem_mb: f64,
-}
-
-#[derive(Serialize)]
 pub struct SystemInfo {
     pub cpu: CpuInfo,
     pub mem: MemInfo,
     pub disks: Vec<DiskInfo>,
-    pub top_processes: Vec<ProcessInfo>,
     pub execution_targets: Vec<ExecutionTargetInfo>,
 }
 
@@ -211,8 +202,7 @@ fn get_system_info() -> SystemInfo {
     let mut sys = System::new_with_specifics(
         RefreshKind::nothing()
             .with_cpu(CpuRefreshKind::everything())
-            .with_memory(MemoryRefreshKind::everything())
-            .with_processes(ProcessRefreshKind::everything()),
+            .with_memory(MemoryRefreshKind::everything()),
     );
     std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
     sys.refresh_cpu_all();
@@ -254,24 +244,10 @@ fn get_system_info() -> SystemInfo {
         })
         .collect();
 
-    let mut procs: Vec<ProcessInfo> = sys
-        .processes()
-        .values()
-        .map(|p| ProcessInfo {
-            pid: p.pid().as_u32(),
-            name: p.name().to_string_lossy().into_owned(),
-            cpu_pct: p.cpu_usage(),
-            mem_mb: p.memory() as f64 / 1_048_576.0,
-        })
-        .collect();
-    procs.sort_by(|a, b| b.cpu_pct.partial_cmp(&a.cpu_pct).unwrap_or(std::cmp::Ordering::Equal));
-    procs.truncate(20);
-
     SystemInfo {
         cpu,
         mem,
         disks,
-        top_processes: procs,
         execution_targets: detect_execution_targets(),
     }
 }
@@ -363,10 +339,7 @@ fn get_compliance_status() -> ComplianceStatus {
     let (btx, brx) = mpsc::channel();
     let (ctxc, crx) = mpsc::channel();
     let (etx, erx) = mpsc::channel();
-    let (dtx, drx) = mpsc::channel();
-    let (rtx, rrx) = mpsc::channel();
-    let (stx, srx) = mpsc::channel();
-    let (certtx, certrx) = mpsc::channel();
+    let (fasttx, fastrx) = mpsc::channel::<(bool, bool, bool, usize)>();
 
     std::thread::spawn(move || {
         let v = run_command("netsh", ["advfirewall", "show", "allprofiles"])
@@ -404,52 +377,33 @@ fn get_compliance_status() -> ComplianceStatus {
         etx.send(v).ok();
     });
 
+    // Combine 4 fast registry/service/cert checks into one PowerShell process
     std::thread::spawn(move || {
-        // Defender: DisableRealtimeMonitoring = 0 means enabled; key absent = enabled
-        let v = run_powershell(
-            "try { $v = (Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows Defender\\Real-Time Protection' -Name DisableRealtimeMonitoring -ErrorAction Stop).DisableRealtimeMonitoring; $v -eq 0 } catch { $true }",
-        )
-        .map(|out| out.trim().to_lowercase() == "true")
-        .unwrap_or(true);
-        dtx.send(v).ok();
+        let script = r#"
+$d = $true
+try { $v = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows Defender\Real-Time Protection' -Name DisableRealtimeMonitoring -EA Stop).DisableRealtimeMonitoring; $d = ($v -eq 0) } catch {}
+$r = ((Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired') -or (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending'))
+$s = ((Get-Service -Name Spooler -EA SilentlyContinue).Status -eq 'Running')
+$w = (Get-Date).AddDays(30)
+$c = (Get-ChildItem Cert:\CurrentUser\My -EA SilentlyContinue | Where-Object { $_.NotAfter -lt $w -and $_.NotAfter -gt (Get-Date) } | Measure-Object).Count
+"$($d.ToString().ToLower())|$($r.ToString().ToLower())|$($s.ToString().ToLower())|$c"
+"#;
+        let out = run_powershell(script).unwrap_or_default();
+        let p: Vec<&str> = out.trim().split('|').collect();
+        let defender  = p.first().map(|s| *s == "true").unwrap_or(true);
+        let reboot    = p.get(1).map(|s| *s == "true").unwrap_or(false);
+        let spooler   = p.get(2).map(|s| *s == "true").unwrap_or(true);
+        let certs     = p.get(3).and_then(|s| s.parse().ok()).unwrap_or(0);
+        fasttx.send((defender, reboot, spooler, certs)).ok();
     });
 
-    std::thread::spawn(move || {
-        let v = run_powershell(
-            "((Test-Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate\\Auto Update\\RebootRequired') -or (Test-Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Component Based Servicing\\RebootPending'))",
-        )
-        .map(|out| out.trim().to_lowercase() == "true")
-        .unwrap_or(false);
-        rtx.send(v).ok();
-    });
-
-    std::thread::spawn(move || {
-        let v = run_powershell("(Get-Service -Name Spooler -ErrorAction SilentlyContinue).Status -eq 'Running'")
-            .map(|out| out.trim().to_lowercase() == "true")
-            .unwrap_or(true);
-        stx.send(v).ok();
-    });
-
-    std::thread::spawn(move || {
-        let v = run_powershell(
-            "$w = (Get-Date).AddDays(30); \
-            (Get-ChildItem Cert:\\CurrentUser\\My -ErrorAction SilentlyContinue \
-            | Where-Object { $_.NotAfter -lt $w -and $_.NotAfter -gt (Get-Date) } \
-            | Measure-Object).Count",
-        )
-        .map(|out| out.trim().parse::<usize>().unwrap_or(0))
-        .unwrap_or(0);
-        certtx.send(v).ok();
-    });
-
-    let firewall_on = frx.recv().unwrap_or(false);
-    let bitlocker_status = brx.recv().unwrap_or_else(|_| "unknown".to_string());
-    let active_connections = crx.recv().unwrap_or(0);
-    let recent_errors = erx.recv().unwrap_or(0);
-    let defender_enabled = drx.recv().unwrap_or(true);
-    let pending_reboot = rrx.recv().unwrap_or(false);
-    let spooler_running = srx.recv().unwrap_or(true);
-    let cert_warnings = certrx.recv().unwrap_or(0);
+    let timeout = Duration::from_secs(10);
+    let firewall_on = frx.recv_timeout(timeout).unwrap_or(false);
+    let bitlocker_status = brx.recv_timeout(timeout).unwrap_or_else(|_| "unknown".to_string());
+    let active_connections = crx.recv_timeout(timeout).unwrap_or(0);
+    let recent_errors = erx.recv_timeout(timeout).unwrap_or(0);
+    let (defender_enabled, pending_reboot, spooler_running, cert_warnings) =
+        fastrx.recv_timeout(timeout).unwrap_or((true, false, true, 0));
 
     ComplianceStatus {
         firewall_on,

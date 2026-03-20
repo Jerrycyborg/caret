@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import type { View } from "../App";
+import { BACKEND_URL } from "../config";
 
 interface Conversation {
   id: string;
@@ -20,8 +21,6 @@ interface SidebarProps {
   theme: "dark" | "light";
   onToggleTheme: () => void;
 }
-
-const BACKEND_URL = "http://localhost:8000";
 
 const NavIcons: Record<string, () => React.ReactElement> = {
   home: () => (

@@ -7,10 +7,9 @@ import Support from "./components/Support";
 import Settings from "./components/Settings";
 import SecurityPanel from "./components/SecurityPanel";
 import "./App.css";
+import { BACKEND_URL } from "./config";
 
 export type View = "home" | "help" | "incidents" | "security" | "settings";
-
-const BACKEND_URL = "http://localhost:8000";
 
 function App() {
   const [view, setView] = useState<View>("home");

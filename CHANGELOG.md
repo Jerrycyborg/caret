@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.2.6 — Pre-fleet stability + UX polish (2026-03-20)
+
+### Bug Fixes — Fleet-breaking
+- `backend/services/management.py`: wrong dict key `daemon.get("incidents_summary")` → `daemon.get("summary")` — management dashboard now shows real incident counts
+- `backend/services/management.py`: stale version default `"0.1.2"` → `"0.2.6"`
+- `backend/main.py`: version strings updated `"0.1.9"` → `"0.2.6"` (log, FastAPI title, health endpoint)
+- `src-tauri/src/plugins/caret_plugin.rs`: plugin state path was relative `"plugins/installed.txt"` — now uses `app_data_dir()` absolute path; plugin installs persist correctly across fleet machines
+- `src/components/SecurityPanel.tsx`: `startAction()` and `confirmAction()` had no try/catch on `invoke()` — UAC cancel left UI frozen in "previewing"/"executing" forever; now resets to idle with error message
+
+### Performance
+- `src-tauri/src/lib.rs`: removed `ProcessRefreshKind::everything()` from `get_system_info` — was enumerating all 200+ processes on every Home tab poll, causing 97-100% CPU spike; now only CPU + memory refresh
+- `src-tauri/src/lib.rs`: 4 separate PowerShell spawns (defender, reboot, spooler, certs) merged into 1 combined script; all compliance channels use `recv_timeout(10s)`
+- `backend/services/support_daemon.py`: 60-second startup delay before first scan cycle — reduces CPU spike on app launch
+- `src/components/Home.tsx`: backend poll interval 3s → 10s
+
+### AI / Help Tab
+- `backend/routers/models.py`: simplified to Copilot-only (`azure/gpt-4o`); `/models/status` returns `ready: true` when Azure env vars set, `ready: false` with hint otherwise
+- `src/components/Chat.tsx`: native `<select>` model dropdown removed (WebView2 dropdown-close bug); replaced with Copilot pill showing Ready/Not configured badge; model locked to `azure/gpt-4o`
+- `src/App.css`: Copilot pill styles added; model selector dead CSS removed
+
+### Code Quality
+- `src/config.ts` (new): single `BACKEND_URL` constant; all 7 frontend files updated to import from it — no more hardcoded `localhost:8000` strings
+- `src-tauri/src/privilege/mod.rs`: removed duplicate `run_command`; uses `crate::run_command` from `lib.rs`
+- `backend/services/support_daemon.py`: fixed misleading chained comparison `0 <= age >= 14` → `14 <= age < 30`
+
+### Auto-fix Actions — Correctness
+- `src-tauri/src/privilege/mod.rs` `ClearTeamsCache`: old script targeted only one hardcoded EBWebView subfolder (always 0 cleared on New Teams MSIX). New script kills both `ms-teams` and `Teams`, sweeps full `%LOCALAPPDATA%\Packages\MSTeams_8wekyb3d8bbwe\LocalCache\` tree for known cache folder names — works for classic and New Teams
+
+### UX
+- `src/components/Home.tsx`: "Monitor" badge label → "Normal" (less alarming for end users)
+- `src/components/SecurityPanel.tsx`: result card now shows specific action output first (e.g. "Cleared 5 Teams cache folders..."), not generic "Sensitive OS action..." string
+- `src/components/SecurityPanel.tsx`: "Running with elevated privileges…" → "Running…" (was misleading for non-UAC actions like Clean Disk, Teams Cache)
+- `src/components/SecurityPanel.tsx`: confirm button label: "Confirm — run now" vs "Confirm — run with UAC" based on `execution_path` (Clean Disk/Teams Cache/OneDrive no longer falsely show UAC)
+
 ## 0.2.5 — Fleet deployment: Linux server + Nginx + NSIS installer (2026-03-19)
 
 ### Management server — production deployment

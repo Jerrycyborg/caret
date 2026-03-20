@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    log.info("Caret backend v0.1.9 starting")
+    log.info("Caret backend v0.2.6 starting")
     await init_db()
     await init_support_tables()
     stop_event = asyncio.Event()
@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI):
         await mgmt_task
 
 
-app = FastAPI(title="Caret Backend", version="0.1.9", lifespan=lifespan)
+app = FastAPI(title="Caret Backend", version="0.2.6", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -54,7 +54,7 @@ app.include_router(management.router, prefix="/v1")
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "0.1.9"}
+    return {"status": "ok", "version": "0.2.6"}
 
 
 @app.get("/v1/logs")

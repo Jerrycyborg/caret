@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { BACKEND_URL } from "../config";
 
 interface ComplianceStatus {
   firewall_on: boolean;
@@ -71,7 +72,7 @@ export default function SecurityPanel() {
   const [eventsLoading, setEventsLoading] = useState(false);
 
   useEffect(() => {
-    fetch("http://localhost:8000/v1/settings/config")
+    fetch(`${BACKEND_URL}/v1/settings/config`)
       .then((r) => r.json())
       .then((data) => {
         const adminGroup: string = data.config?.management?.admin_group ?? "";
@@ -95,21 +96,31 @@ export default function SecurityPanel() {
     setActionState("previewing");
     setActionResult(null);
     setPendingRequest(request);
-    const p = await invoke<PrivilegedActionPreview>("preview_privileged_action", { request });
-    setPreview(p);
+    try {
+      const p = await invoke<PrivilegedActionPreview>("preview_privileged_action", { request });
+      setPreview(p);
+    } catch (e) {
+      setActionState("idle");
+      setActionResult({ status: "error", message: String(e) });
+    }
   };
 
   const confirmAction = async () => {
     if (!pendingRequest) return;
     setActionState("executing");
-    const result = await invoke<PrivilegedActionResult>("execute_privileged_action", {
-      request: pendingRequest,
-      approved: true,
-    });
-    setActionResult(result);
-    setActionState("done");
-    setPreview(null);
-    invoke<ComplianceStatus>("get_compliance_status").then(setCompliance).catch(() => {});
+    try {
+      const result = await invoke<PrivilegedActionResult>("execute_privileged_action", {
+        request: pendingRequest,
+        approved: true,
+      });
+      setActionResult(result);
+      setActionState("done");
+      setPreview(null);
+      invoke<ComplianceStatus>("get_compliance_status").then(setCompliance).catch(() => {});
+    } catch (e) {
+      setActionState("idle");
+      setActionResult({ status: "error", message: String(e) });
+    }
   };
 
   const toggleEvents = async () => {
@@ -313,7 +324,7 @@ export default function SecurityPanel() {
       {!loading && adminStatus?.is_admin && (
         <div className="admin-section">
           <div className="settings-section-title">Admin actions</div>
-          <div className="settings-line">All actions require UAC confirmation and are logged.</div>
+          <div className="settings-line">All actions are logged. Some require UAC confirmation.</div>
 
           {actionState === "idle" && (
             <div className="admin-actions">
@@ -347,20 +358,21 @@ export default function SecurityPanel() {
               <div className="preview-reason">{preview.reason}</div>
               <div className="preview-path">Via: {preview.execution_path}</div>
               <div className="preview-buttons">
-                <button className="btn-save" onClick={confirmAction}>Confirm — run with UAC</button>
+                <button className="btn-save" onClick={confirmAction}>
+                  {preview.execution_path.includes("no UAC") ? "Confirm — run now" : "Confirm — run with UAC"}
+                </button>
                 <button className="btn-clear" onClick={cancelAction}>Cancel</button>
               </div>
             </div>
           )}
 
           {actionState === "executing" && (
-            <div className="compliance-loading">Running with elevated privileges…</div>
+            <div className="compliance-loading">Running…</div>
           )}
 
           {actionState === "done" && actionResult && (
             <div className={`action-result result-${actionResult.status}`}>
-              <div>{actionResult.message}</div>
-              {actionResult.details && <div className="result-detail">{actionResult.details}</div>}
+              <div>{actionResult.details || actionResult.message}</div>
               <button className="btn-clear" onClick={cancelAction}>Done</button>
             </div>
           )}

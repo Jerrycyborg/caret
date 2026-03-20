@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { BACKEND_URL } from "../config";
 
 interface KeyStatus {
   provider: string;
@@ -41,8 +42,6 @@ const PROVIDERS: ProviderDef[] = [
   { id: "gemini", name: "Google Gemini", icon: "✨", desc: "Gemini API access.", placeholder: "AIza..." },
   { id: "azure", name: "Azure OpenAI", icon: "☁️", desc: "Enterprise OpenAI via Azure.", placeholder: "Azure API key" },
 ];
-
-const BACKEND_URL = "http://localhost:8000";
 
 const EMPTY_CONFIG: ConfigState = {
   org: { org_name: "", environment_label: "" },

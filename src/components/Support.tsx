@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-
-const BACKEND_URL = "http://localhost:8000";
+import { BACKEND_URL } from "../config";
 
 type SupportSignal = {
   issue_key: string;
